@@ -46,6 +46,8 @@ export class DisplayDriver {
     this.ctx.fillRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
 
     this.drawHexes();
+    this.drawTanks();
+    this.drawSites();
   }
 
   public resize() {
@@ -109,6 +111,44 @@ export class DisplayDriver {
     this.ctx.restore();
   }
 
+  private drawSites() {
+    if (this.gameState === null) return;
+    for (const site of this.gameState.sites) {
+      if (!this.gameState.hexes.has(site.p.toString())) {
+        continue;
+      }
+      const sprite = this.getSiteSprite(
+        site.variant,
+        this.gameState.visibleHexes.has(site.p.toString()),
+      );
+      this.drawSprite(sprite, site.p);
+    }
+  }
+
+  private drawTanks() {
+    if (this.gameState === null) return;
+    for (const tank of this.gameState.playerTanks) {
+      if (!tank.visible) continue;
+      const sprite = this.getTankSprites(
+        true,
+        tank.angleBody,
+        tank.angleTurret,
+      );
+      this.drawSprite(sprite.body, tank.pF);
+      this.drawSprite(sprite.turret, tank.pF);
+    }
+    for (const tank of this.gameState.enemyTanks) {
+      if (!tank.visible) continue;
+      const sprite = this.getTankSprites(
+        false,
+        tank.angleBody,
+        tank.angleTurret,
+      );
+      this.drawSprite(sprite.body, tank.pF);
+      this.drawSprite(sprite.turret, tank.pF);
+    }
+  }
+
   private getHexSize(): Vector {
     return this.curPreset.sprites.hexSize.mul(this.curPreset.scale);
   }
@@ -118,5 +158,35 @@ export class DisplayDriver {
       return this.curPreset.sprites.hexes.light[variant];
     }
     return this.curPreset.sprites.hexes.dark[variant];
+  }
+
+  private getSiteSprite(variant: number, light: boolean): Sprite {
+    if (light) {
+      return this.curPreset.sprites.sites.light[variant];
+    }
+    return this.curPreset.sprites.sites.dark[variant];
+  }
+
+  private getTankSprites(
+    isPlayer: boolean,
+    angleBody: number,
+    angleTurret: number,
+  ): { body: Sprite; turret: Sprite } {
+    const len = this.curPreset.sprites.tanksBodies.length;
+    const bodyIdx = Math.min(
+      len - 1,
+      Math.max(0, Math.round((angleBody / 360) * len)),
+    );
+    const turretIdx = Math.min(
+      len - 1,
+      Math.max(0, Math.round((angleTurret / 360) * len)),
+    );
+    let body = this.curPreset.sprites.tanksBodies[bodyIdx];
+    let turret = this.curPreset.sprites.tanksTurrets[turretIdx];
+    if (!isPlayer) {
+      body = this.curPreset.sprites.enemyTanksBodies[bodyIdx];
+      turret = this.curPreset.sprites.enemyTanksTurrets[turretIdx];
+    }
+    return { body: body, turret: turret };
   }
 }
