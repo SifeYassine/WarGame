@@ -27,6 +27,10 @@ export class Vector {
     return new Vector(this.x - other.x, this.y - other.y);
   }
 
+  matmul(other: Vector): Vector {
+    return new Vector(this.x * other.x, this.y * other.y);
+  }
+
   round(): Vector {
     return new Vector(Math.round(this.x), Math.round(this.y));
   }
