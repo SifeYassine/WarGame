@@ -29,3 +29,18 @@ canvas {
 	user-select: none;
 	touch-action: none;
 }
+
+input#in-game-input {
+	color: white;
+	background-color: transparent;
+	position: absolute;
+	border-radius: 0px;
+	border: none;
+	padding: 0px;
+	text-align: center;
+	text-transform: uppercase;
+}
+
+input#in-game-input:focus {
+	outline: none;
+}

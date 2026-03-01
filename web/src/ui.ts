@@ -38,6 +38,66 @@ interface Button {
   resize(): void;
 }
 
+class TextInput implements Button {
+  area: Area;
+  state: ButtonState;
+  baseFontSize: number;
+  fontSizeMultiplier?: number;
+  element: HTMLInputElement;
+
+  constructor(element: HTMLInputElement, fontSizeMultiplier?: number) {
+    this.area = newArea(0, 0, 0, 0);
+    this.state = ButtonState.Invisible;
+    this.baseFontSize = 0;
+    if (fontSizeMultiplier !== undefined) {
+      this.fontSizeMultiplier = fontSizeMultiplier;
+    }
+
+    element.maxLength = 5;
+    element.style.fontFamily = "monospace";
+    this.element = element;
+  }
+
+  public hide() {
+    this.element.style.display = "none";
+    this.element.value = "";
+  }
+
+  public show() {
+    this.element.style.display = "";
+  }
+
+  collides(p: Vector): boolean {
+    const end = this.area.start.add(this.area.size);
+    if (
+      p.x >= this.area.start.x &&
+      p.y >= this.area.start.y &&
+      p.x <= end.x &&
+      p.y <= end.y
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  getEvent(): GameEvent {
+    return { type: GameEventType.NoneEvent };
+  }
+
+  resize() {
+    const mul = 1 / window.devicePixelRatio;
+    const start = this.area.start.mul(mul).round();
+    const size = this.area.size.mul(mul).round();
+    const borderWidth = this.area.size.y * 0.08 * mul;
+    this.element.style.left = `${start.x}px`;
+    this.element.style.top = `${start.y}px`;
+    this.element.style.width = `${size.x}px`;
+    this.element.style.height = `${size.y}px`;
+    this.element.style.fontSize = `${this.baseFontSize * mul}px`;
+    this.element.style.borderBottom = `${borderWidth}px solid white`;
+  }
+}
+
 function newArea(
   startX: number,
   startY: number,
