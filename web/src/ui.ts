@@ -1,4 +1,5 @@
 import { GameEvent, GameEventType, TypeOnlyEvent } from "./game-event.js";
+import { Notifier } from "./notifier.js";
 import { Vector } from "./vector.js";
 
 type Area = { start: Vector; size: Vector };
@@ -36,6 +37,41 @@ interface Button {
   getEvent(): GameEvent;
   // only needed for text input
   resize(): void;
+}
+
+class StandardButton implements Button {
+  area: Area;
+  text: string;
+  baseFontSize: number;
+  fontSizeMultiplier?: number;
+  state: ButtonState = ButtonState.Normal;
+  event: GameEvent;
+
+  constructor(
+    text: string,
+    eventType: TypeOnlyEvent,
+    fontSizeMultiplier?: number,
+  ) {
+    this.area = newArea(0, 0, 0, 0);
+    this.text = text;
+    this.baseFontSize = 0;
+    if (fontSizeMultiplier !== undefined) {
+      this.fontSizeMultiplier = fontSizeMultiplier;
+    }
+    this.event = { type: eventType };
+  }
+
+  public collides(p: Vector): boolean {
+    return boxCollision(this.area, p);
+  }
+
+  public getEvent(): GameEvent {
+    return this.event;
+  }
+
+  resize() {
+    // only needed for text input
+  }
 }
 
 class TextInput implements Button {
@@ -228,6 +264,157 @@ class Panel {
       }
       button.baseFontSize = Math.round(button.baseFontSize);
       button.resize();
+    }
+  }
+}
+
+export enum UIMode {
+  Main,
+  InGame,
+}
+
+export class UI {
+  notifier: Notifier;
+  panels: Panel[];
+  buttons: Map<UIMode, Button[]> = new Map();
+  curButtons: Button[] = [];
+
+  constructor(notifier: Notifier, inputElement: HTMLInputElement) {
+    this.notifier = notifier;
+
+    const inGameMenuPanel = new Panel(
+      {
+        maxWidth: 0.27,
+        maxHeight: 1,
+        buff: 0.04,
+        baseFontSize: 24,
+        aspectRatio: 1 / 3,
+        grid: new Vector(2, 8),
+      },
+      {
+        maxWidth: 1,
+        maxHeight: 0.25,
+        buff: 0.05,
+        baseFontSize: 12,
+        minAspectRatio: 3.0,
+        grid: new Vector(3, 2),
+      },
+    );
+    const mainMenuPanel = new Panel(
+      {
+        maxWidth: 1,
+        maxHeight: 0.88,
+        buff: 0.04,
+        baseFontSize: 20,
+        aspectRatio: 5 / 6,
+        align: Align.Center,
+        grid: new Vector(4, 6),
+      },
+      {
+        maxWidth: 0.8,
+        maxHeight: 0.88,
+        buff: 0.05,
+        baseFontSize: 20,
+        aspectRatio: 5 / 6,
+        align: Align.Center,
+        grid: new Vector(4, 6),
+      },
+    );
+    const modalPanel = new Panel(
+      {
+        maxWidth: 0.8,
+        maxHeight: 0.88,
+        buff: 0.04,
+        baseFontSize: 20,
+        minAspectRatio: 1 / 3,
+        align: Align.Center,
+        grid: new Vector(4, 8),
+      },
+      {
+        maxWidth: 0.8,
+        maxHeight: 0.88,
+        buff: 0.05,
+        baseFontSize: 20,
+        minAspectRatio: 1 / 3,
+        align: Align.Center,
+        grid: new Vector(4, 8),
+      },
+    );
+
+    this.panels = [inGameMenuPanel, mainMenuPanel, modalPanel];
+
+    const buttonSendTurn = new StandardButton(
+      "send turn",
+      GameEventType.ButtonSendTurn,
+    );
+    const buttonQuitGame = new StandardButton(
+      "quit game",
+      GameEventType.ButtonQuitGame,
+    );
+    const buttonZoomIn = new StandardButton(
+      "+",
+      GameEventType.ButtonZoomIn,
+      1.5,
+    );
+    const buttonZoomOut = new StandardButton(
+      "-",
+      GameEventType.ButtonZoomOut,
+      1.5,
+    );
+    inGameMenuPanel.attachButton(
+      buttonSendTurn,
+      newArea(0, 0, 2, 1),
+      newArea(0, 0, 1, 1),
+    );
+    inGameMenuPanel.attachButton(
+      buttonQuitGame,
+      newArea(0, 1, 2, 1),
+      newArea(0, 1, 1, 1),
+    );
+    inGameMenuPanel.attachButton(
+      buttonZoomIn,
+      newArea(0, 2, 2, 1),
+      newArea(1, 0, 1, 1),
+    );
+    inGameMenuPanel.attachButton(
+      buttonZoomOut,
+      newArea(0, 3, 2, 1),
+      newArea(1, 1, 1, 1),
+    );
+
+    const inGameButtons = [
+      buttonSendTurn,
+      buttonQuitGame,
+      buttonZoomIn,
+      buttonZoomOut,
+    ];
+
+    this.buttons.set(UIMode.InGame, inGameButtons);
+
+    const buttonInputRoomCode = new TextInput(inputElement);
+    mainMenuPanel.attachButton(
+      buttonInputRoomCode,
+      newArea(1, 1, 2, 1),
+      newArea(1, 1, 2, 1),
+    );
+
+    const buttonJoinRoom = new StandardButton(
+      "join room",
+      GameEventType.ButtonJoinRoom,
+    );
+    mainMenuPanel.attachButton(
+      buttonJoinRoom,
+      newArea(1, 2, 2, 1),
+      newArea(1, 2, 2, 1),
+    );
+    this.buttons.set(UIMode.Main, [buttonJoinRoom, buttonInputRoomCode]);
+
+    this.curButtons = this.buttons.get(UIMode.Main) || [];
+  }
+
+  public resize(space: Vector) {
+    for (const panel of this.panels) {
+      panel.resize(space);
     }
   }
 }
