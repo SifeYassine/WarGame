@@ -6,6 +6,7 @@ import {
   Sprite,
 } from "./sprites.js";
 import { GameState, getTankById, Tank } from "./game-objects.js";
+import { ButtonState, UI } from "./ui.js";
 
 type SpriteConfig = { scale: number; sprites: SpritePreset };
 
@@ -16,6 +17,7 @@ export class DisplayDriver {
   backgroundColor: string = "rgb(50, 50, 50)";
   ctx: CanvasRenderingContext2D;
   gameState: GameState | null;
+  ui: UI;
   sprites: HTMLImageElement;
 
   cameraOffset: Vector = new Vector(0, 0);
@@ -34,9 +36,11 @@ export class DisplayDriver {
   constructor(
     ctx: CanvasRenderingContext2D,
     gameState: GameState | null,
+    ui: UI,
   ) {
     this.ctx = ctx;
     this.gameState = gameState;
+    this.ui = ui;
     this.sprites = new Image();
     this.sprites.src = SPRITES_IMAGE_SRC;
   }
@@ -48,6 +52,7 @@ export class DisplayDriver {
     this.drawHexes();
     this.drawTanks();
     this.drawSites();
+    this.drawUI();
   }
 
   public resize() {
@@ -63,6 +68,7 @@ export class DisplayDriver {
     this.ctx.canvas.width = canvasSize.x;
     this.ctx.canvas.height = canvasSize.y;
 
+    this.ui.resize(canvasSize);
   }
 
   public gridToScreenCoords(p: Vector): Vector {
@@ -91,6 +97,51 @@ export class DisplayDriver {
       size.x,
       size.y,
     );
+  }
+
+  private drawUI() {
+    this.ctx.save();
+
+    for (const button of this.ui.curButtons) {
+      if (button.state === ButtonState.Invisible) continue;
+      this.ctx.globalAlpha = 0.8;
+      this.ctx.fillStyle = "white";
+      if (button.state === ButtonState.Pressed) {
+        this.ctx.fillStyle = "#444444";
+      }
+      if (button.state === ButtonState.Inactive) {
+        this.ctx.fillStyle = "white";
+      }
+
+      this.ctx.fillRect(
+        button.area.start.x,
+        button.area.start.y,
+        button.area.size.x,
+        button.area.size.y,
+      );
+
+      let fontSize = button.baseFontSize;
+      fontSize = Math.round(fontSize);
+      this.ctx.font = `bold ${fontSize}px monospace`;
+      this.ctx.textAlign = "center";
+      this.ctx.textBaseline = "middle";
+      this.ctx.fillStyle = "black";
+      if (button.state === ButtonState.Inactive) {
+        this.ctx.fillStyle = "#444444";
+        this.ctx.fillRect(
+          button.area.start.x + 2,
+          button.area.start.y + 2,
+          button.area.size.x - 4,
+          button.area.size.y - 4,
+        );
+        this.ctx.fillStyle = "white";
+      }
+      this.ctx.globalAlpha = 1;
+      const center = button.area.start.add(button.area.size.mul(0.5)).round();
+      this.ctx.fillText(button.text || "", center.x, center.y);
+    }
+
+    this.ctx.restore();
   }
 
   private drawHexes() {
