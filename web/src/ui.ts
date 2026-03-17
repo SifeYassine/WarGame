@@ -39,6 +39,44 @@ interface Button {
   resize(): void;
 }
 
+class Modal implements Button {
+  area: Area;
+  text: string;
+  state: ButtonState = ButtonState.Normal;
+  baseFontSize: number;
+  fontSizeMultiplier?: number | undefined;
+
+  crossArea: Area = newArea(0, 0, 0, 0);
+  crossStrokeWidth: number = 0;
+
+  constructor(fontSizeMultiplier: number = 1) {
+    this.area = newArea(0, 0, 0, 0);
+    this.text = "";
+    this.baseFontSize = 0;
+    this.fontSizeMultiplier = fontSizeMultiplier;
+  }
+
+  collides(p: Vector): boolean {
+    return boxCollision(this.crossArea, p);
+  }
+
+  resize() {
+    this.crossStrokeWidth = Math.floor(this.baseFontSize * 0.22);
+    const length = Math.floor(
+      Math.min(this.area.size.x, this.area.size.y) * 0.08,
+    );
+    const size = new Vector(length, length);
+    const startX = this.area.start.x + this.area.size.x - 2 * length;
+    const startY = this.area.start.y + 1 * length;
+    const start = new Vector(startX, startY);
+    this.crossArea = { start: start, size: size };
+  }
+
+  getEvent(): GameEvent {
+    return { type: GameEventType.NoneEvent };
+  }
+}
+
 class StandardButton implements Button {
   area: Area;
   text: string;
@@ -278,6 +316,8 @@ export class UI {
   panels: Panel[];
   buttons: Map<UIMode, Button[]> = new Map();
   curButtons: Button[] = [];
+  modal: Modal;
+  modalTextQueue: string[] = [];
 
   constructor(notifier: Notifier, inputElement: HTMLInputElement) {
     this.notifier = notifier;
@@ -410,6 +450,41 @@ export class UI {
     this.buttons.set(UIMode.Main, [buttonJoinRoom, buttonInputRoomCode]);
 
     this.curButtons = this.buttons.get(UIMode.Main) || [];
+
+    this.modal = new Modal();
+    modalPanel.attachButton(
+      this.modal,
+      newArea(0, 0, 4, 8),
+      newArea(0, 0, 4, 8),
+    );
+  }
+
+  public hasModal(): boolean {
+    if (this.modalTextQueue.length > 0) {
+      return true;
+    }
+    return false;
+  }
+
+  public getModal(): Modal | null {
+    if (this.hasModal()) {
+      return this.modal;
+    }
+    return null;
+  }
+
+  public addModal(text: string) {
+    this.modalTextQueue.push(text);
+    if (this.modalTextQueue.length === 1) {
+      this.modal.text = text;
+    }
+  }
+
+  public removeModal() {
+    this.modalTextQueue.shift();
+    if (this.hasModal()) {
+      this.modal.text = this.modalTextQueue[0];
+    }
   }
 
   public resize(space: Vector) {
@@ -419,14 +494,22 @@ export class UI {
   }
 
   public handlePointerStart(p: Vector) {
+    if (this.hasModal()) return;
     this.mark(p, ButtonState.Pressed);
   }
 
   public handlePointerMove(p: Vector) {
+    if (this.hasModal()) return;
     this.mark(p, ButtonState.Pressed);
   }
 
   public handlePointerEnd(p: Vector) {
+    if (this.hasModal()) {
+      if (this.modal.collides(p)) {
+        this.removeModal();
+      }
+      return;
+    }
     for (const button of this.curButtons) {
       if (
         button.collides(p) &&
@@ -441,6 +524,7 @@ export class UI {
   }
 
   public collides(p: Vector): boolean {
+    if (this.hasModal()) return true;
     for (const button of this.curButtons) {
       if (button.collides(p)) {
         return true;

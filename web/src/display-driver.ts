@@ -141,6 +141,32 @@ export class DisplayDriver {
       this.ctx.fillText(button.text || "", center.x, center.y);
     }
 
+    const modal = this.ui.getModal();
+    if (modal !== null) {
+      const area = modal.area;
+      this.ctx.globalAlpha = 0.6;
+      this.ctx.fillStyle = "white";
+      this.ctx.fillRect(area.start.x, area.start.y, area.size.x, area.size.y);
+      this.ctx.font = `bold ${modal.baseFontSize}px monospace`;
+      this.ctx.textAlign = "center";
+      this.ctx.textBaseline = "middle";
+      this.ctx.globalAlpha = 1;
+      this.ctx.fillStyle = "black";
+      const center = area.start.add(area.size.mul(0.5)).round();
+      this.ctx.fillText(modal.text || "", center.x, center.y);
+
+      this.ctx.lineWidth = modal.crossStrokeWidth;
+      this.ctx.beginPath();
+      const start = modal.crossArea.start;
+      const end = start.add(modal.crossArea.size);
+      this.ctx.moveTo(start.x, start.y);
+      this.ctx.lineTo(end.x, end.y);
+      this.ctx.moveTo(start.x, end.y);
+      this.ctx.lineTo(end.x, start.y);
+      this.ctx.closePath();
+      this.ctx.stroke();
+    }
+
     this.ctx.restore();
   }
 
