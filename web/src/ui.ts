@@ -417,4 +417,49 @@ export class UI {
       panel.resize(space);
     }
   }
+
+  public handlePointerStart(p: Vector) {
+    this.mark(p, ButtonState.Pressed);
+  }
+
+  public handlePointerMove(p: Vector) {
+    this.mark(p, ButtonState.Pressed);
+  }
+
+  public handlePointerEnd(p: Vector) {
+    for (const button of this.curButtons) {
+      if (
+        button.collides(p) &&
+        button.state !== ButtonState.Inactive &&
+        button.state !== ButtonState.Invisible
+      ) {
+        this.notifier.notify(button.getEvent());
+        break;
+      }
+    }
+    this.mark(p, ButtonState.Normal);
+  }
+
+  public collides(p: Vector): boolean {
+    for (const button of this.curButtons) {
+      if (button.collides(p)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private mark(p: Vector, state: ButtonState) {
+    for (const button of this.curButtons) {
+      if (
+        button.state === ButtonState.Inactive ||
+        button.state === ButtonState.Invisible
+      )
+        continue;
+      button.state = ButtonState.Normal;
+      if (button.collides(p)) {
+        button.state = state;
+      }
+    }
+  }
 }
