@@ -121,6 +121,9 @@ public class GameState
                 case TankActionType.Move:
                     ResolveMove(action.Path ?? [], tank, player, enemy);
                     break;
+                case TankActionType.Fire:
+                    ResolveFire(action.Dir, tank, player, enemy);
+                    break;
             }
         }
     }
@@ -139,12 +142,61 @@ public class GameState
         for (int i = 0; i < path.Count - 2; i++)
         {
             tank.Position = path[i + 1];
+            UpdateVisibilities(player, enemy);
             ReportTankAction(new Move3ResultDto(tank.Id, path[i], path[i + 1], path[i + 2]), tank, player, enemy);
         }
 
         int last = path.Count - 1;
         tank.Position = path[last];
+        UpdateVisibilities(player, enemy);
         ReportTankAction(new Move2ResultDto(tank.Id, path[last - 1], path[last], false), tank, player, enemy);
+    }
+
+    private void ResolveFire(Vector dir, Tank tank, Side player, Side enemy)
+    {
+        if (!dir.IsUnit())
+        {
+            return;
+        }
+        ReportTankAction(new FireResultDto(tank.Id, dir), tank, player, enemy);
+
+        // The shell flies until it hits something or reaches its maximum range.
+        var target = tank.Position;
+        for (int i = 0; i < _config.FireRange; i++)
+        {
+            target = target.Add(dir);
+            if (IsSite(target) || FindTankAt(target) != null)
+            {
+                break;
+            }
+        }
+
+        bool playerSees = CanSee(player, target);
+        bool enemySees = CanSee(enemy, target);
+
+        var hitTank = FindTankAt(target);
+        if (hitTank != null)
+        {
+            hitTank.Destroyed = true;
+        }
+
+        var explosion = hitTank != null
+            ? new ExplosionResultDto(target, true, hitTank.Id)
+            : new ExplosionResultDto(target, false, 0);
+
+        if (playerSees)
+        {
+            player.Results.Add(explosion);
+        }
+        if (enemySees)
+        {
+            enemy.Results.Add(explosion);
+        }
+
+        if (hitTank != null)
+        {
+            UpdateVisibilities(player, enemy);
+        }
     }
 
     // The owner always sees what their tank does; the enemy only if the tank is visible.
@@ -157,8 +209,55 @@ public class GameState
         }
     }
 
+    private void UpdateVisibilities(Side a, Side b)
+    {
+        RefreshVisibility(viewer: a, watched: b);
+        RefreshVisibility(viewer: b, watched: a);
+    }
+
+    // Checks which of the watched side's tanks the viewer can see now,
+    // and tells the viewer about every change.
+    private void RefreshVisibility(Side viewer, Side watched)
+    {
+        foreach (var tank in watched.Tanks.Values)
+        {
+            if (tank.Seen)
+            {
+                continue;
+            }
+
+            bool isVisible = CanSee(viewer, tank.Position);
+
+            if (isVisible && !tank.Visible)
+            {
+                if (tank.Destroyed)
+                {
+                    // A wreck the viewer hasn't seen yet.
+                    tank.Seen = true;
+                    viewer.Results.Add(new DestroyedResultDto(tank.Position, tank.Id));
+                }
+                else
+                {
+                    viewer.Results.Add(new VisibleResultDto(tank.Id, tank.Position, true));
+                }
+            }
+            if (!tank.Destroyed && !isVisible && tank.Visible)
+            {
+                viewer.Results.Add(new VisibleResultDto(tank.Id, tank.Position, false));
+            }
+
+            tank.Visible = isVisible;
+        }
+    }
+
+    private bool CanSee(Side viewer, Vector position) =>
+        viewer.Tanks.Values.Any(t => !t.Destroyed && t.Position.DistanceTo(position) <= _config.VisibilityRange);
+
     private Tank? FindTankAt(Vector position) =>
         _tanksP1.Values.Concat(_tanksP2.Values).FirstOrDefault(t => !t.Destroyed && t.Position == position);
+
+    private bool IsSite(Vector position) =>
+        _hexes.TryGetValue(position, out var hex) && !hex.Traversable;
 
     private bool IsTraversable(Vector position) =>
         _hexes.TryGetValue(position, out var hex) && hex.Traversable && FindTankAt(position) == null;
