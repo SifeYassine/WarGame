@@ -21,6 +21,9 @@ public class PlayerConnection
         _socket = socket;
     }
 
+    // The room the player is in, or null when they are in the menu.
+    public GameRoom? Room { get; set; }
+
     public async Task SendAsync(ServerMessageDto message)
     {
         var bytes = JsonSerializer.SerializeToUtf8Bytes(message, JsonOptions);
