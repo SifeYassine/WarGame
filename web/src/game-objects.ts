@@ -9,6 +9,31 @@ export function getTankById(tanks: Tank[], id: number): Tank | null {
   return null;
 }
 
+export enum GameResult {
+  Win = 1,
+  Draw = 2,
+  Lose = 3,
+}
+
+enum TankActionType {
+  Move = 1,
+  Fire = 2,
+}
+
+export type TankMove = {
+  type: TankActionType.Move;
+  id: number;
+  path: Vector[];
+};
+
+export type TankFire = {
+  type: TankActionType.Fire;
+  id: number;
+  dir: Vector;
+};
+
+export type TankAction = TankMove | TankFire;
+
 export type GameConfig = {
   hexes: { p: Vector; variant: number }[];
   playerTanks: { id: number; p: Vector }[];
@@ -43,6 +68,79 @@ export type Tank = {
   shootingDir: number;
   visible: boolean;
 };
+
+export enum TurnResultType {
+  Move2 = 1,
+  Move3 = 2,
+  Fire = 3,
+  Explosion = 4,
+  Destroyed = 5,
+  Visible = 6,
+  Shrink = 7,
+  EndTurn = 1 << 8,
+}
+
+export type TurnResultMove2 = {
+  type: TurnResultType.Move2;
+  id: number;
+  p1: Vector;
+  p2: Vector;
+  start: boolean;
+};
+
+export type TurnResultMove3 = {
+  type: TurnResultType.Move3;
+  id: number;
+  p1: Vector;
+  p2: Vector;
+  p3: Vector;
+};
+
+export type TurnResultFire = {
+  type: TurnResultType.Fire;
+  id: number;
+  dir: Vector;
+};
+
+export type TurnResultExplosion = {
+  type: TurnResultType.Explosion;
+  p: Vector;
+  destroyed: boolean;
+  id: number;
+};
+
+export type TurnResultDestroyed = {
+  type: TurnResultType.Destroyed;
+  p: Vector;
+  id: number;
+};
+
+export type TurnResultVisible = {
+  type: TurnResultType.Visible;
+  id: number;
+  p: Vector;
+  visible: boolean;
+};
+
+export type TurnResultShrink = {
+  type: TurnResultType.Shrink;
+  r: number;
+  started: boolean;
+};
+
+export type TurnResultEndTurn = {
+  type: TurnResultType.EndTurn;
+};
+
+export type TurnResult =
+  | TurnResultMove2
+  | TurnResultMove3
+  | TurnResultFire
+  | TurnResultExplosion
+  | TurnResultDestroyed
+  | TurnResultVisible
+  | TurnResultShrink
+  | TurnResultEndTurn;
 
 export class GameState {
   hexes: Map<string, Hex>;
