@@ -319,6 +319,11 @@ export class UI {
   modal: Modal;
   modalTextQueue: string[] = [];
 
+  specialButtons: {
+    joinRoom: StandardButton;
+    textInput: TextInput;
+  };
+
   constructor(notifier: Notifier, inputElement: HTMLInputElement) {
     this.notifier = notifier;
 
@@ -451,6 +456,13 @@ export class UI {
 
     this.curButtons = this.buttons.get(UIMode.Main) || [];
 
+    buttonJoinRoom.state = ButtonState.Inactive;
+
+    this.specialButtons = {
+      joinRoom: buttonJoinRoom,
+      textInput: buttonInputRoomCode,
+    };
+
     this.modal = new Modal();
     modalPanel.attachButton(
       this.modal,
@@ -531,6 +543,16 @@ export class UI {
       }
     }
     return false;
+  }
+
+  public setOnlineGameAvailability(available: boolean) {
+    this.specialButtons.joinRoom.state = available
+      ? ButtonState.Normal
+      : ButtonState.Inactive;
+  }
+
+  public getRoomCode(): string {
+    return this.specialButtons.textInput.element.value.toUpperCase();
   }
 
   private mark(p: Vector, state: ButtonState) {

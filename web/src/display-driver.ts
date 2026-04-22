@@ -53,6 +53,16 @@ export class DisplayDriver {
     this.drawTanks();
     this.drawSites();
     this.drawUI();
+
+    if (freeze) {
+      this.ctx.save();
+      this.ctx.fillStyle = "black";
+      this.ctx.globalAlpha = 0.6;
+      const x = this.ctx.canvas.width;
+      const y = this.ctx.canvas.height;
+      this.ctx.fillRect(0, 0, x, y);
+      this.ctx.restore();
+    }
   }
 
   public resize() {
