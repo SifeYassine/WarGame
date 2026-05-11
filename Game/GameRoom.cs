@@ -1,4 +1,5 @@
 using WarGame.Dtos;
+using WarGame.Models;
 using WarGame.Services;
 
 namespace WarGame.Game;
@@ -105,10 +106,62 @@ public class GameRoom
 
             await _player1!.SendAsync(new TurnResultsMessageDto(resultsP1));
             await _player2!.SendAsync(new TurnResultsMessageDto(resultsP2));
+
+            var outcome = _game.GetOutcome();
+            if (outcome != null)
+            {
+                await _player1.SendAsync(new GameFinishedMessageDto(outcome.Player1));
+                await _player2.SendAsync(new GameFinishedMessageDto(outcome.Player2));
+                await CloseAsync();
+            }
         }
         finally
         {
             _lock.Release();
         }
+    }
+
+    // The player quit or closed the tab.
+    public async Task LeaveAsync(PlayerConnection player)
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            if (_status == RoomStatus.Closed || (player != _player1 && player != _player2))
+            {
+                return;
+            }
+
+            if (_status == RoomStatus.Running)
+            {
+                // Whoever leaves loses.
+                var other = player == _player1 ? _player2 : _player1;
+                await player.SendAsync(new GameFinishedMessageDto(GameResult.Lose));
+                await other!.SendAsync(new GameFinishedMessageDto(GameResult.Win));
+            }
+
+            await CloseAsync();
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    // Must be called while holding _lock.
+    private async Task CloseAsync()
+    {
+        _status = RoomStatus.Closed;
+
+        foreach (var player in new[] { _player1, _player2 })
+        {
+            if (player != null)
+            {
+                player.Room = null;
+                await player.SendAsync(new RoomDisconnectedMessageDto());
+            }
+        }
+
+        _onClosed(Code);
     }
 }

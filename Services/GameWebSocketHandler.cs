@@ -36,6 +36,11 @@ public class GameWebSocketHandler
         }
         finally
         {
+            // Closing the tab in the middle of a game counts as quitting.
+            if (player.Room != null)
+            {
+                await player.Room.LeaveAsync(player);
+            }
             await player.CloseAsync();
             _logger.LogInformation("Player disconnected");
         }
@@ -66,6 +71,13 @@ public class GameWebSocketHandler
                     return;
                 }
                 await player.Room.SubmitTurnAsync(player, message.Actions ?? []);
+                break;
+
+            case ClientMessageType.QuitRoom:
+                if (player.Room != null)
+                {
+                    await player.Room.LeaveAsync(player);
+                }
                 break;
         }
     }
