@@ -1,5 +1,7 @@
+import { GameConfig, GameResult, GameState } from "./game-objects.js";
 import { Vector } from "./vector.js";
 import { DisplayDriver } from "./display-driver.js";
+import { Grid } from "./grid.js";
 import { UI, UIMode } from "./ui.js";
 import { Notifier } from "./notifier.js";
 import { GameEvent, GameEventType } from "./game-event.js";
@@ -20,6 +22,7 @@ export class Game {
   notifier: Notifier;
   displayDriver: DisplayDriver;
   wsDriver: WsDriver;
+  grid: Grid | null = null;
   ui: UI;
   isPointerDown = false;
   layer: Layer = Layer.UI;
@@ -28,6 +31,7 @@ export class Game {
     mainMenu: StateGame;
     waitingForRoom: StateGame;
     waitingRoom: StateGame;
+    inGame: StateGame;
   };
   state: StateGame;
 
@@ -51,6 +55,7 @@ export class Game {
       mainMenu: new GameStateMainMenu(this),
       waitingForRoom: new GameStateWaitForRoom(this),
       waitingRoom: new GameStateWaitingRoom(this),
+      inGame: new GameStateInGame(this),
     };
     this.state = this.states.mainMenu;
   }
@@ -91,11 +96,29 @@ export class Game {
     return e;
   }
 
+  public initGrid(config: GameConfig) {
+    const gameState = new GameState(config);
+    this.grid = new Grid(
+      gameState,
+      this.displayDriver,
+      config,
+    );
+    this.displayDriver.gameState = gameState;
+    this.displayDriver.reset();
+  }
+
+  public removeGrid() {
+    this.grid = null;
+    this.displayDriver.gameState = null;
+  }
+
   private handlePointerStart(p: Vector) {
     this.isPointerDown = true;
     this.layer = this.ui.collides(p) ? Layer.UI : Layer.Grid;
     if (this.layer === Layer.UI) {
       this.ui.handlePointerStart(p);
+    } else {
+      this.grid?.handlePointerStart(p);
     }
   }
 
@@ -103,6 +126,8 @@ export class Game {
     this.isPointerDown = false;
     if (this.layer === Layer.UI) {
       this.ui.handlePointerEnd(p);
+    } else {
+      this.grid?.handlePointerEnd(p);
     }
     this.layer = Layer.UI;
   }
@@ -111,11 +136,14 @@ export class Game {
     if (!this.isPointerDown) return;
     if (this.layer === Layer.UI) {
       this.ui.handlePointerMove(p);
+    } else {
+      this.grid?.handlePointerMove(p);
     }
   }
 
   private draw(curT: number) {
     this.displayDriver.draw(this.freeze);
+    this.grid?.setT(curT);
     requestAnimationFrame((t: number) => {
       this.draw(t);
     });
@@ -217,6 +245,11 @@ class GameStateWaitingRoom implements StateGame {
         this.game.ui.enableMode(UIMode.Main);
         this.game.setState(this.game.states.mainMenu);
         break;
+      case GameEventType.StartGame:
+        this.game.initGrid(event.config);
+        this.game.ui.enableMode(UIMode.InGame);
+        this.game.setState(this.game.states.inGame);
+        break;
       case GameEventType.RoomDisconnected:
         this.game.ui.addModal("room disconnected");
         this.game.ui.enableMode(UIMode.Main);
@@ -225,6 +258,46 @@ class GameStateWaitingRoom implements StateGame {
         break;
       case GameEventType.ButtonQuitGame:
         this.game.wsDriver.sendQuitRoom();
+        this.game.ui.enableMode(UIMode.Main);
+        this.game.setState(this.game.states.mainMenu);
+        break;
+    }
+  }
+}
+class GameStateInGame implements StateGame {
+  game: Game;
+
+  str = "in-game";
+  gameFinished: boolean = false;
+
+  constructor(game: Game) {
+    this.game = game;
+  }
+
+  onEnter() {
+    this.gameFinished = false;
+  }
+
+  update(event: GameEvent): void {
+    switch (event.type) {
+      case GameEventType.WsClose:
+        this.game.ui.setOnlineGameAvailability(false);
+        this.game.ui.addModal("server disconnected");
+        this.game.removeGrid();
+        this.game.ui.enableMode(UIMode.Main);
+        this.game.setState(this.game.states.mainMenu);
+        break;
+      case GameEventType.RoomDisconnected:
+        this.game.ui.addModal("room disconnected");
+        this.game.removeGrid();
+        this.game.ui.enableMode(UIMode.Main);
+        this.game.setState(this.game.states.mainMenu);
+        break;
+      case GameEventType.ButtonQuitGame:
+        if (!this.gameFinished) {
+          this.game.wsDriver.sendQuitRoom();
+        }
+        this.game.removeGrid();
         this.game.ui.enableMode(UIMode.Main);
         this.game.setState(this.game.states.mainMenu);
         break;

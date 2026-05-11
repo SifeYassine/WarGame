@@ -81,6 +81,30 @@ export class DisplayDriver {
     this.ui.resize(canvasSize);
   }
 
+  public reset() {
+    this.presetIdx = DEFAULT_PRESET_IDX;
+    this.curPreset = this.spriteConfigs[this.presetIdx];
+    this.cameraOffset = Vector.zero();
+  }
+
+  public addCameraOffset(v: Vector) {
+    this.cameraOffset = this.cameraOffset.add(v);
+  }
+
+  public screenToGridCoords(p: Vector): Vector {
+    const worldCoords = p.sub(this.cameraOffset);
+    const hexSize = this.getHexSize();
+    let y = ((worldCoords.y / hexSize.y) * 4) / 3;
+    let x = worldCoords.x / hexSize.x - y / 2;
+    const roundX = Math.round(x);
+    const roundY = Math.round(y);
+    x -= roundX;
+    y -= roundY;
+    const dx = Math.round(x + 0.5 * y) * Number(x * x >= y * y);
+    const dy = Math.round(y + 0.5 * x) * Number(x * x < y * y);
+    return new Vector(roundX + dx, roundY + dy);
+  }
+
   public gridToScreenCoords(p: Vector): Vector {
     const hexSize = this.getHexSize();
     const y = (p.y * hexSize.y * 3) / 4;
