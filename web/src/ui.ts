@@ -308,6 +308,7 @@ class Panel {
 
 export enum UIMode {
   Main,
+  WaitingRoom,
   InGame,
 }
 
@@ -454,6 +455,17 @@ export class UI {
     );
     this.buttons.set(UIMode.Main, [buttonJoinRoom, buttonInputRoomCode]);
 
+    const buttonQuitRoom = new StandardButton(
+      "quit room",
+      GameEventType.ButtonQuitGame,
+    );
+    mainMenuPanel.attachButton(
+      buttonQuitRoom,
+      newArea(1, 2, 2, 1),
+      newArea(1, 2, 2, 1),
+    );
+    this.buttons.set(UIMode.WaitingRoom, [buttonQuitRoom]);
+
     this.curButtons = this.buttons.get(UIMode.Main) || [];
 
     buttonJoinRoom.state = ButtonState.Inactive;
@@ -496,6 +508,16 @@ export class UI {
     this.modalTextQueue.shift();
     if (this.hasModal()) {
       this.modal.text = this.modalTextQueue[0];
+    }
+  }
+
+  public enableMode(mode: UIMode) {
+    this.resetCurrent();
+    this.curButtons = this.buttons.get(mode) || [];
+    for (const button of this.curButtons) {
+      if (button === this.specialButtons.textInput) {
+        this.specialButtons.textInput.show();
+      }
     }
   }
 
@@ -566,6 +588,20 @@ export class UI {
       if (button.collides(p)) {
         button.state = state;
       }
+    }
+  }
+
+  private resetCurrent() {
+    for (const button of this.curButtons) {
+      if (button === this.specialButtons.textInput) {
+        this.specialButtons.textInput.hide();
+      }
+      if (
+        button.state === ButtonState.Inactive ||
+        button.state === ButtonState.Invisible
+      )
+        continue;
+      button.state = ButtonState.Normal;
     }
   }
 }

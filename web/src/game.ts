@@ -27,6 +27,7 @@ export class Game {
   states: {
     mainMenu: StateGame;
     waitingForRoom: StateGame;
+    waitingRoom: StateGame;
   };
   state: StateGame;
 
@@ -49,6 +50,7 @@ export class Game {
     this.states = {
       mainMenu: new GameStateMainMenu(this),
       waitingForRoom: new GameStateWaitForRoom(this),
+      waitingRoom: new GameStateWaitingRoom(this),
     };
     this.state = this.states.mainMenu;
   }
@@ -183,10 +185,47 @@ class GameStateWaitForRoom implements StateGame {
         break;
       case GameEventType.RoomJoined:
         this.game.freeze = false;
+        this.game.ui.enableMode(UIMode.WaitingRoom);
+        this.game.setState(this.game.states.waitingRoom);
         break;
       case GameEventType.RoomDisconnected:
         this.game.freeze = false;
         this.game.ui.addModal("cant join room");
+        this.game.setState(this.game.states.mainMenu);
+        break;
+    }
+  }
+}
+class GameStateWaitingRoom implements StateGame {
+  str = "waiting-room";
+  game: Game;
+  constructor(game: Game) {
+    this.game = game;
+  }
+
+  onEnter(): void {
+  }
+
+  update(event: GameEvent): void {
+    switch (event.type) {
+      case GameEventType.WsOpen:
+        this.game.ui.setOnlineGameAvailability(true);
+        break;
+      case GameEventType.WsClose:
+        this.game.ui.setOnlineGameAvailability(false);
+        this.game.ui.addModal("connection lost");
+        this.game.ui.enableMode(UIMode.Main);
+        this.game.setState(this.game.states.mainMenu);
+        break;
+      case GameEventType.RoomDisconnected:
+        this.game.ui.addModal("room disconnected");
+        this.game.ui.enableMode(UIMode.Main);
+        this.game.setState(this.game.states.mainMenu);
+        this.game.freeze;
+        break;
+      case GameEventType.ButtonQuitGame:
+        this.game.wsDriver.sendQuitRoom();
+        this.game.ui.enableMode(UIMode.Main);
         this.game.setState(this.game.states.mainMenu);
         break;
     }

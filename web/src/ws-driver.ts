@@ -53,6 +53,9 @@ type ClientMessage =
       type: ClientMessageType.JoinRoom;
       roomCode: string;
     }
+  | {
+      type: ClientMessageType.QuitRoom;
+    };
 
 export class WsDriver {
   open: boolean = false;
@@ -78,6 +81,13 @@ export class WsDriver {
     const msg: ClientMessage = {
       type: ClientMessageType.JoinRoom,
       roomCode: code,
+    };
+    this.send(msg);
+  }
+
+  public sendQuitRoom() {
+    const msg: ClientMessage = {
+      type: ClientMessageType.QuitRoom,
     };
     this.send(msg);
   }
