@@ -2,6 +2,7 @@ import { GameEventType } from "./game-event.js";
 import {
   GameConfig,
   GameResult,
+  TankAction,
   TurnResult,
 } from "./game-objects.js";
 import { Notifier } from "./notifier.js";
@@ -54,6 +55,10 @@ type ClientMessage =
       roomCode: string;
     }
   | {
+      type: ClientMessageType.SendTurn;
+      actions: TankAction[];
+    }
+  | {
       type: ClientMessageType.QuitRoom;
     };
 
@@ -81,6 +86,14 @@ export class WsDriver {
     const msg: ClientMessage = {
       type: ClientMessageType.JoinRoom,
       roomCode: code,
+    };
+    this.send(msg);
+  }
+
+  public sendActions(actions: TankAction[]) {
+    const msg: ClientMessage = {
+      type: ClientMessageType.SendTurn,
+      actions: actions,
     };
     this.send(msg);
   }

@@ -292,11 +292,14 @@ class GameStateInGame implements StateGame {
 
   onEnter() {
     this.gameFinished = false;
+
+    this.game.ui.setSendTurnAvailability(true);
   }
 
   update(event: GameEvent): void {
     switch (event.type) {
       case GameEventType.WsClose:
+        this.game.ui.setSendTurnAvailability(false);
         this.game.ui.setOnlineGameAvailability(false);
         this.game.ui.addModal("server disconnected");
         this.game.removeGrid();
@@ -304,6 +307,7 @@ class GameStateInGame implements StateGame {
         this.game.setState(this.game.states.mainMenu);
         break;
       case GameEventType.RoomDisconnected:
+        this.game.ui.setSendTurnAvailability(false);
         this.game.ui.addModal("room disconnected");
         this.game.removeGrid();
         this.game.ui.enableMode(UIMode.Main);
@@ -322,6 +326,12 @@ class GameStateInGame implements StateGame {
         this.game.removeGrid();
         this.game.ui.enableMode(UIMode.Main);
         this.game.setState(this.game.states.mainMenu);
+        break;
+      case GameEventType.ButtonSendTurn:
+        if (this.game.grid === null) return;
+        this.game.ui.setSendTurnAvailability(false);
+        const actions = this.game.grid.getActions();
+        this.game.wsDriver.sendActions(actions);
         break;
     }
   }

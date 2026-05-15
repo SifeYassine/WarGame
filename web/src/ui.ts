@@ -323,6 +323,7 @@ export class UI {
   specialButtons: {
     joinRoom: StandardButton;
     textInput: TextInput;
+    sendTurn: StandardButton;
   };
 
   constructor(notifier: Notifier, inputElement: HTMLInputElement) {
@@ -473,6 +474,7 @@ export class UI {
     this.specialButtons = {
       joinRoom: buttonJoinRoom,
       textInput: buttonInputRoomCode,
+      sendTurn: buttonSendTurn,
     };
 
     this.modal = new Modal();
@@ -569,6 +571,12 @@ export class UI {
 
   public setOnlineGameAvailability(available: boolean) {
     this.specialButtons.joinRoom.state = available
+      ? ButtonState.Normal
+      : ButtonState.Inactive;
+  }
+
+  public setSendTurnAvailability(available: boolean) {
+    this.specialButtons.sendTurn.state = available
       ? ButtonState.Normal
       : ButtonState.Inactive;
   }
