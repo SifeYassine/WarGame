@@ -47,6 +47,14 @@ export class Vector {
     return new Vector(this.x, this.y);
   }
 
+  angle(): number {
+    const a = (Math.atan2(this.y, this.x) * 180) / Math.PI;
+    if (a < 0) {
+      return a + 360;
+    }
+    return a;
+  }
+
   gridDistance(other: Vector): number {
     const v = this.sub(other);
     const x = Math.abs(v.x);

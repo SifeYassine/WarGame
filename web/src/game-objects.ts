@@ -32,6 +32,14 @@ export type TankFire = {
   dir: Vector;
 };
 
+export function newTankFire(id: number, dir: Vector): TankFire {
+  return { type: TankActionType.Fire, id: id, dir: dir };
+}
+
+export function newTankMove(id: number, path: Vector[]): TankMove {
+  return { type: TankActionType.Move, id: id, path: path };
+}
+
 export type TankAction = TankMove | TankFire;
 
 export type GameConfig = {
