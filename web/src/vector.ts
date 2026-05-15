@@ -64,6 +64,27 @@ export class Vector {
   }
 }
 
+export function isNeighbor(p1: Vector, p2: Vector): boolean {
+  if (!p1.eq(p1.floor())) return false;
+  if (!p2.eq(p2.floor())) return false;
+  if (p1.eq(p2)) return false;
+  const v = p2.sub(p1);
+
+  if (v.x <= 1 && v.x >= -1 && v.y === 0) return true;
+  if (v.y <= 1 && v.y >= -1 && v.x === 0) return true;
+  if ((v.x === 1 && v.y === -1) || (v.x === -1 && v.y === 1)) return true;
+  return false;
+}
+
+export function includesVector(arr: Vector[], v: Vector) {
+  for (const av of arr) {
+    if (av.eq(v)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 const IDX_TO_UNIT_VECTOR: Map<number, Vector> = new Map([
   [0, new Vector(1, 0)],
   [1, new Vector(0, 1)],

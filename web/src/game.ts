@@ -159,6 +159,7 @@ export class Game {
   private draw(curT: number) {
     this.displayDriver.draw(this.freeze);
     this.grid?.setT(curT);
+    this.grid?.tick();
     requestAnimationFrame((t: number) => {
       this.draw(t);
     });
