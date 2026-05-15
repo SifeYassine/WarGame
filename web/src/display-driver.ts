@@ -87,6 +87,39 @@ export class DisplayDriver {
     this.cameraOffset = Vector.zero();
   }
 
+  public handleZoomIn() {
+    this.zoom(true);
+  }
+
+  public handleZoomOut() {
+    this.zoom(false);
+  }
+
+  private zoom(zoomIn: boolean) {
+    if (zoomIn && this.presetIdx === this.spriteConfigs.length - 1) return;
+    if (!zoomIn && this.presetIdx === 0) return;
+    if (zoomIn) {
+      this.presetIdx++;
+    } else {
+      this.presetIdx--;
+    }
+    const oldHexWidth = this.curPreset.sprites.hexSize.x * this.curPreset.scale;
+
+    this.curPreset = this.spriteConfigs[this.presetIdx];
+
+    const newHexWidth = this.curPreset.sprites.hexSize.x * this.curPreset.scale;
+
+    const center = new Vector(
+      this.ctx.canvas.width,
+      this.ctx.canvas.height,
+    ).mul(0.5);
+
+    this.cameraOffset = this.cameraOffset
+      .sub(center)
+      .mul(newHexWidth / oldHexWidth)
+      .add(center);
+  }
+
   public addCameraOffset(v: Vector) {
     this.cameraOffset = this.cameraOffset.add(v);
   }

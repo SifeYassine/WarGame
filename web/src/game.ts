@@ -86,6 +86,13 @@ export class Game {
       const screenP = elementToScreenCoords(new Vector(e.offsetX, e.offsetY));
       this.handlePointerMove(screenP);
     });
+    canvas.addEventListener("wheel", (e: WheelEvent) => {
+      if (e.deltaY > 0) {
+        this.handleZoomOut();
+        return;
+      }
+      this.handleZoomIn();
+    });
   }
 
   private createInputElement(): HTMLInputElement {
@@ -110,6 +117,14 @@ export class Game {
   public removeGrid() {
     this.grid = null;
     this.displayDriver.gameState = null;
+  }
+
+  public handleZoomIn() {
+    this.displayDriver.handleZoomIn();
+  }
+
+  public handleZoomOut() {
+    this.displayDriver.handleZoomOut();
   }
 
   private handlePointerStart(p: Vector) {
@@ -292,6 +307,12 @@ class GameStateInGame implements StateGame {
         this.game.removeGrid();
         this.game.ui.enableMode(UIMode.Main);
         this.game.setState(this.game.states.mainMenu);
+        break;
+      case GameEventType.ButtonZoomIn:
+        this.game.handleZoomIn();
+        break;
+      case GameEventType.ButtonZoomOut:
+        this.game.handleZoomOut();
         break;
       case GameEventType.ButtonQuitGame:
         if (!this.gameFinished) {
