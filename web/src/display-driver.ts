@@ -4,6 +4,7 @@ import {
   SPRITES_96,
   SpritePreset,
   Sprite,
+  ValidPathsKeys,
 } from "./sprites.js";
 import { GameState, getTankById, Tank } from "./game-objects.js";
 import { ButtonState, UI } from "./ui.js";
@@ -11,6 +12,8 @@ import { ButtonState, UI } from "./ui.js";
 type SpriteConfig = { scale: number; sprites: SpritePreset };
 
 const SPRITES_IMAGE_SRC = "./assets/sprites.png";
+const GREEN_HIGHLIGHT_IDX = 0;
+const YELLOW_HIGHLIGHT_IDX = 1;
 const DEFAULT_PRESET_IDX = 1;
 
 export class DisplayDriver {
@@ -50,6 +53,7 @@ export class DisplayDriver {
     this.ctx.fillRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
 
     this.drawHexes();
+    this.drawPaths();
     this.drawTanks();
     this.drawSites();
     this.drawUI();
@@ -237,6 +241,69 @@ export class DisplayDriver {
     this.ctx.restore();
   }
 
+  private drawPaths() {
+    if (this.gameState === null) return;
+    let moveIdx = 0;
+    for (const id of this.gameState.turnOrder) {
+      const tank = getTankById(this.gameState.playerTanks, id);
+      if (tank === null) continue;
+      if (tank.path.length < 2) continue;
+
+      const vStart = tank.path[1].sub(tank.path[0]);
+      const vEnd = tank.path[tank.path.length - 2].sub(
+        tank.path[tank.path.length - 1],
+      );
+      const variantStart = unitVectorToIdx(vStart);
+      const variantEnd = unitVectorToIdx(vEnd);
+
+      const spriteStart = this.getPathSprite(moveIdx, variantStart.toString());
+      const spriteEnd = this.getPathSprite(moveIdx, variantEnd.toString());
+
+      const triangleVariant = [0, 2, 4].includes(variantEnd)
+        ? "arrowL"
+        : "arrowR";
+      const spriteTriangle = this.getPathSprite(moveIdx, triangleVariant);
+
+      this.drawSprite(spriteStart, tank.p);
+      this.drawSprite(spriteEnd, tank.path[tank.path.length - 1]);
+      this.drawSprite(spriteTriangle, tank.path[tank.path.length - 1]);
+
+      for (let i = 0; i < tank.path.length - 2; i++) {
+        const p1 = tank.path[i];
+        const p2 = tank.path[i + 1];
+        const p3 = tank.path[i + 2];
+        const variants = this.getPathSegmentVariants(
+          p1,
+          p2,
+          p3,
+        ) as ValidPathsKeys[];
+        for (const variant of variants) {
+          const sprite = this.getPathSprite(moveIdx, variant);
+          this.drawSprite(sprite, p2);
+        }
+      }
+      moveIdx++;
+    }
+
+    for (const tank of this.gameState.playerTanks) {
+      if (tank.shooting) {
+        const sprite = this.getAimSprite(tank.shootingDir);
+        this.drawSprite(sprite, tank.p);
+      }
+    }
+  }
+
+  private getPathSegmentVariants(p1: Vector, p2: Vector, p3: Vector): string[] {
+    const v1 = p1.sub(p2);
+    const v2 = p3.sub(p2);
+    const idx1 = unitVectorToIdx(v1);
+    const idx2 = unitVectorToIdx(v2);
+    if (Math.abs(idx1 - idx2) === 3) {
+      return [idx1.toString(), idx2.toString()];
+    }
+    return [Math.min(idx1, idx2).toString() + Math.max(idx1, idx2).toString()];
+  }
+
   private drawHexes() {
     if (this.gameState === null) return;
 
@@ -250,6 +317,14 @@ export class DisplayDriver {
 
       this.ctx.globalAlpha = hex.opacity;
       this.drawSprite(sprite, hex.p);
+      if (this.gameState.conditionallyAvailableHexes.has(hex.p.toString())) {
+        const sprite = this.getHighlightSprite(YELLOW_HIGHLIGHT_IDX);
+        this.drawSprite(sprite, hex.p);
+      }
+      if (this.gameState.availableHexes.has(hex.p.toString())) {
+        const sprite = this.getHighlightSprite(GREEN_HIGHLIGHT_IDX);
+        this.drawSprite(sprite, hex.p);
+      }
     }
 
     this.ctx.restore();
@@ -297,6 +372,10 @@ export class DisplayDriver {
     return this.curPreset.sprites.hexSize.mul(this.curPreset.scale);
   }
 
+  private getAimSprite(variant: number): Sprite {
+    return this.curPreset.sprites.overlays.aim[variant];
+  }
+
   private getHexSprite(variant: number, light: boolean): Sprite {
     if (light) {
       return this.curPreset.sprites.hexes.light[variant];
@@ -332,5 +411,17 @@ export class DisplayDriver {
       turret = this.curPreset.sprites.enemyTanksTurrets[turretIdx];
     }
     return { body: body, turret: turret };
+  }
+
+  private getHighlightSprite(variant: number): Sprite {
+    return this.curPreset.sprites.overlays.highlights[variant];
+  }
+
+  private getPathSprite(idx: number, variant: string) {
+    const len = this.curPreset.sprites.overlays.paths.length;
+    idx = idx % len;
+    return this.curPreset.sprites.overlays.paths[idx][
+      variant as ValidPathsKeys
+    ];
   }
 }

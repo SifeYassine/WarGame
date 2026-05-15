@@ -55,6 +55,7 @@ export class Grid {
       tank.shooting = false;
       tank.shootingDir = 0;
       this.curTank = tank;
+      this.recalculateTraversable();
       this.saveOrder(tank.id);
       return;
     }
@@ -81,6 +82,7 @@ export class Grid {
     this.isPointerDown = false;
     this.curMode = PointerMode.None;
     this.curTank = null;
+    this.recalculateTraversable();
   }
 
   public tick() {
@@ -128,6 +130,88 @@ export class Grid {
       this.curTank.path.push(this.curTank.p);
     }
     this.curTank.path.push(gridP);
+
+    this.recalculateTraversable();
+  }
+
+  private recalculateTraversable() {
+    this.recalculateAvailableHexes(this.gameState.availableHexes, false);
+    this.recalculateAvailableHexes(
+      this.gameState.conditionallyAvailableHexes,
+      true,
+    );
+  }
+
+  private recalculateAvailableHexes(set: Set<string>, conditional: boolean) {
+    set.clear();
+    if (this.curTank === null) {
+      return;
+    }
+    let start = this.curTank.p;
+    let range = this.config.driveRange;
+    if (this.curTank.path.length > 0) {
+      start = this.curTank.path[this.curTank.path.length - 1];
+      range -= this.curTank.path.length - 1;
+    }
+    if (range <= 0) {
+      return;
+    }
+
+    const unavailable: Set<string> = new Set();
+    if (!conditional) {
+      for (const tank of this.gameState.playerTanks) {
+        if (!tank.visible || tank.id === this.curTank.id) continue;
+        unavailable.add(tank.p.toString());
+      }
+      for (const tank of this.gameState.enemyTanks) {
+        if (!tank.visible) continue;
+        unavailable.add(tank.p.toString());
+      }
+    }
+
+    for (let i = 0; i < this.curTank.path.length - 1; i++) {
+      if (unavailable.has(this.curTank.path[i].toString()) && !conditional) {
+        set.clear();
+        return;
+      }
+      unavailable.add(this.curTank.path[i].toString());
+    }
+    if (
+      this.curTank.path.length > 0 &&
+      unavailable.has(
+        this.curTank.path[this.curTank.path.length - 1].toString(),
+      ) &&
+      !conditional
+    ) {
+      set.clear();
+      return;
+    }
+
+    let frontier = [start];
+    set.add(start.toString());
+
+    for (let i = 0; i < range; i++) {
+      let newFrontier = [];
+      for (const p of frontier) {
+        for (const n of p.neighbors()) {
+          if (set.has(n.toString())) {
+            continue;
+          }
+          const hex = this.gameState.hexes.get(n.toString());
+          if (hex === undefined || !hex.traversable) {
+            continue;
+          }
+          if (unavailable.has(n.toString())) {
+            continue;
+          }
+          set.add(n.toString());
+          newFrontier.push(n);
+        }
+      }
+      frontier = newFrontier;
+    }
+
+    set.delete(start.toString());
   }
 
   public recalculateVisibleHexes() {
