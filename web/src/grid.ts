@@ -1,4 +1,5 @@
 import { DisplayDriver } from "./display-driver.js";
+import { GameEventType } from "./game-event.js";
 import {
   GameConfig,
   GameState,
@@ -7,7 +8,10 @@ import {
   newTankMove,
   Tank,
   TankAction,
+  TurnResult,
+  TurnResultType,
 } from "./game-objects.js";
+import { Notifier } from "./notifier.js";
 import {
   idxToUnitVector,
   includesVector,
@@ -22,11 +26,13 @@ enum PointerMode {
   Drag,
   TankNavigation,
   TankFire,
+  Animation,
 }
 
 export class Grid {
   gameState: GameState;
   displayDriver: DisplayDriver;
+  notifier: Notifier;
   config: {
     driveRange: number;
     visibilityRange: number;
@@ -39,10 +45,16 @@ export class Grid {
 
   curTank: Tank | null = null;
 
+  turnResults: TurnResult[] = [];
+  curTurnResultIdx: number = 0;
+  prevResult: TurnResult | null = null;
+  curResult: TurnResult | null = null;
+
   constructor(
     gameState: GameState,
     displayDriver: DisplayDriver,
     config: GameConfig,
+    notifier: Notifier,
   ) {
     this.gameState = gameState;
     this.displayDriver = displayDriver;
@@ -51,6 +63,7 @@ export class Grid {
       visibilityRange: config.visibilityRange,
     };
     this.recalculateVisibleHexes();
+    this.notifier = notifier;
   }
 
   public getActions(): TankAction[] {
@@ -74,8 +87,13 @@ export class Grid {
     this.isPointerDown = true;
     this.pointerStartTime = this.curT;
 
+    if (this.curMode === PointerMode.Animation) {
+      return;
+    }
+
     const tank = this.getCollidingTank(p);
     if (tank !== null) {
+      this.notifier.notify({ type: GameEventType.TankManipulation });
       this.curMode = PointerMode.TankNavigation;
       tank.path = [];
       tank.shooting = false;
@@ -116,12 +134,16 @@ export class Grid {
       case PointerMode.TankFire:
         this.handleTankFire(p);
         break;
+      case PointerMode.Animation:
+        this.handleDrag(p);
+        break;
     }
     this.lastPoint = p;
   }
 
   public handlePointerEnd(p: Vector) {
     this.isPointerDown = false;
+    if (this.curMode === PointerMode.Animation) return;
     if (
       this.curMode === PointerMode.TankNavigation ||
       this.curMode === PointerMode.TankFire
@@ -139,8 +161,48 @@ export class Grid {
     }
   }
 
+  public handleStartAnimation() {
+    this.handlePointerEnd(Vector.zero());
+    this.curMode = PointerMode.Animation;
+  }
+
+  public handleEndAnimation() {
+    this.handlePointerEnd(Vector.zero());
+    this.curMode = PointerMode.None;
+    this.notifier.notify({ type: GameEventType.AnimationEnd });
+  }
+
   public setT(t: number) {
     this.curT = t;
+  }
+
+  public nextTurnResult() {
+    this.prevResult = this.curResult;
+    if (this.curTurnResultIdx >= this.turnResults.length) {
+      this.curResult = null;
+      return;
+    }
+    this.curResult = this.turnResults[this.curTurnResultIdx];
+    this.curTurnResultIdx++;
+  }
+
+  public peekTurnResult(): TurnResult | null {
+    if (this.curTurnResultIdx >= this.turnResults.length) {
+      return null;
+    }
+    return this.turnResults[this.curTurnResultIdx];
+  }
+
+  public pushResults(turnResults: TurnResult[]) {
+    this.clearPathsAndAims();
+
+    if (this.curTurnResultIdx >= this.turnResults.length) {
+      this.turnResults = turnResults;
+      this.curTurnResultIdx = 0;
+    } else {
+      this.turnResults.push(...turnResults);
+    }
+    this.turnResults.push({ type: TurnResultType.EndTurn });
   }
 
   private handleEndTankNavigationFire() {
@@ -150,6 +212,14 @@ export class Grid {
       this.curTank.path.length === 0
     ) {
       this.removeOrder(this.curTank.id);
+    }
+  }
+
+  private clearPathsAndAims() {
+    for (const tank of this.gameState.playerTanks) {
+      tank.path = [];
+      tank.shooting = false;
+      tank.shootingDir = 0;
     }
   }
 

@@ -109,6 +109,7 @@ export class Game {
       gameState,
       this.displayDriver,
       config,
+      this.notifier,
     );
     this.displayDriver.gameState = gameState;
     this.displayDriver.reset();
@@ -282,22 +283,34 @@ class GameStateWaitingRoom implements StateGame {
 }
 class GameStateInGame implements StateGame {
   game: Game;
+  isAnimating: boolean = false;
 
   str = "in-game";
   gameFinished: boolean = false;
+  counterIncoming: number = 0;
+  counterFinished: number = 0;
 
   constructor(game: Game) {
     this.game = game;
   }
 
   onEnter() {
+    this.isAnimating = false;
     this.gameFinished = false;
+    this.counterIncoming = 0;
+    this.counterFinished = 0;
 
     this.game.ui.setSendTurnAvailability(true);
   }
 
   update(event: GameEvent): void {
     switch (event.type) {
+      case GameEventType.ReceiveTurnResults:
+        this.counterIncoming++;
+        this.game.grid?.pushResults(event.turnResults);
+        this.game.ui.setSendTurnAvailability(false);
+        this.isAnimating = true;
+        break;
       case GameEventType.WsClose:
         this.game.ui.setSendTurnAvailability(false);
         this.game.ui.setOnlineGameAvailability(false);
@@ -332,6 +345,18 @@ class GameStateInGame implements StateGame {
         this.game.ui.setSendTurnAvailability(false);
         const actions = this.game.grid.getActions();
         this.game.wsDriver.sendActions(actions);
+        break;
+      case GameEventType.AnimationEnd:
+        this.counterFinished++;
+        if (this.counterFinished === this.counterIncoming) {
+          this.isAnimating = false;
+          this.game.ui.setSendTurnAvailability(!this.gameFinished);
+        }
+        break;
+      case GameEventType.TankManipulation:
+        if (!this.gameFinished && !this.isAnimating) {
+          this.game.ui.setSendTurnAvailability(true);
+        }
         break;
     }
   }
