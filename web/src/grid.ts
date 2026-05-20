@@ -9,6 +9,7 @@ import {
   Tank,
   TankAction,
   TurnResult,
+  TurnResultMove2,
   TurnResultType,
 } from "./game-objects.js";
 import { Notifier } from "./notifier.js";
@@ -16,10 +17,14 @@ import {
   idxToUnitVector,
   includesVector,
   isNeighbor,
+  unitVectorToIdx,
   Vector,
 } from "./vector.js";
 
 const T_PRESS_TO_FIRE = 700;
+
+const TANK_ROTATION_SPEED = 100;
+const TANK_MAX_SPEED = 1.2;
 
 enum PointerMode {
   None,
@@ -76,12 +81,25 @@ export class Grid {
     this.animationResolver.animate();
   }
 
+  private getTank(id: number): Tank | null {
+    const tank =
+      getTankById(this.gameState.playerTanks, id) ||
+      getTankById(this.gameState.enemyTanks, id);
+    if (tank === undefined) return null;
+    return tank;
+  }
+
   private getAnimationResolver(): Resolver {
     if (this.curResult === null) {
       return new ResolverIdle(this);
     }
     if (this.curResult.type === TurnResultType.EndTurn) {
       return new ResolverFinish(this);
+    }
+    if (this.curResult.type === TurnResultType.Move2) {
+      const tank = this.getTank(this.curResult.id);
+      if (tank === null) return new ResolverError(this);
+      return new ResolverMove2(this, this.curResult, tank);
     }
 
     return new ResolverRest(this);
@@ -426,6 +444,18 @@ class ResolverIdle implements Resolver {
   }
 }
 
+class ResolverError implements Resolver {
+  grid: Grid;
+
+  constructor(grid: Grid) {
+    this.grid = grid;
+  }
+
+  animate() {
+    this.grid.transition();
+  }
+}
+
 function areaUnderLine(y1: number, y2: number, t: number): number {
   if (t <= 0) return 0;
   const low = Math.min(y1, y2);
@@ -459,6 +489,107 @@ function normalize180(angle: number) {
     angle -= 360;
   }
   return angle;
+}
+
+class ResolverMove2 implements Resolver {
+  grid: Grid;
+  result: TurnResultMove2;
+  tank: Tank;
+
+  startAngle: number;
+  endAngle: number;
+  dAngle: number;
+  turretOffset: number;
+  tRotation: number;
+
+  startT: number;
+  startF: Vector;
+  endF: Vector;
+  tMove: number;
+  aul: number;
+  y1: number;
+  y2: number;
+
+  constructor(grid: Grid, result: TurnResultMove2, tank: Tank) {
+    this.grid = grid;
+    this.result = result;
+
+    this.startAngle = tank.angleBody;
+    this.turretOffset = normalize360(tank.angleTurret - tank.angleBody);
+    this.endAngle = unitVectorToIdx(result.p2.sub(result.p1)) * 60;
+    this.dAngle = normalize180(this.endAngle - this.startAngle);
+    this.tRotation = (Math.abs(this.dAngle) / TANK_ROTATION_SPEED) * 1000;
+    if (!this.result.start) {
+      this.tRotation = 0;
+    }
+
+    this.startT = this.grid.curT;
+    this.startF = this.result.p1;
+    this.endF = this.result.p2;
+    const mid = this.startF.add(this.endF).mul(0.5);
+    if (this.result.start) {
+      this.endF = mid;
+    } else {
+      this.startF = mid;
+    }
+
+    tank.p = this.result.start ? this.result.p1 : this.result.p2;
+    this.tank = tank;
+    this.grid.recalculateVisibleHexes();
+
+    const d = this.endF
+      .toPlaneCoords()
+      .sub(this.startF.toPlaneCoords())
+      .length();
+    const aul = areaUnderLine(0, 1, 1);
+    this.tMove = (d / (aul * TANK_MAX_SPEED)) * 1000;
+    this.aul = aul;
+    if (result.start) {
+      this.y1 = 0;
+      this.y2 = 1;
+    } else {
+      this.y1 = 1;
+      this.y2 = 0;
+    }
+  }
+
+  animate() {
+    const elapsed = this.grid.curT - this.startT;
+    const fracT1 = this.tRotation === 0 ? 1 : elapsed / this.tRotation;
+    const fracT2 = (elapsed - this.tRotation) / this.tMove;
+    this.animateRotation(fracT1);
+    if (fracT2 >= 0) {
+      this.animateMove(fracT2);
+    }
+  }
+
+  animateRotation(fracT: number) {
+    if (fracT <= 0) {
+      this.tank.angleBody = this.startAngle;
+      this.tank.angleTurret = normalize360(this.startAngle + this.turretOffset);
+      return;
+    }
+    if (fracT >= 1) {
+      this.tank.angleBody = this.endAngle;
+      this.tank.angleTurret = normalize360(this.endAngle + this.turretOffset);
+      return;
+    }
+    this.tank.angleBody = normalize360(this.startAngle + fracT * this.dAngle);
+    this.tank.angleTurret = normalize360(
+      this.tank.angleBody + this.turretOffset,
+    );
+  }
+
+  animateMove(fracT: number) {
+    const frac = areaUnderLine(this.y1, this.y2, fracT) / this.aul;
+
+    const p = this.startF.interpolate(this.endF, frac);
+    this.tank.pF = p;
+
+    if (frac >= 1) {
+      this.grid.transition();
+    }
+  }
 }
 
 class ResolverRest implements Resolver {
