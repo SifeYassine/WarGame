@@ -55,6 +55,10 @@ export class Vector {
     return a;
   }
 
+  length(): number {
+    return Math.sqrt(this.x * this.x + this.y * this.y);
+  }
+
   gridDistance(other: Vector): number {
     const v = this.sub(other);
     const x = Math.abs(v.x);
@@ -69,6 +73,22 @@ export class Vector {
       neighbors.push(this.add(nv));
     }
     return neighbors;
+  }
+
+  interpolate(other: Vector, t: number) {
+    if (t <= 0) {
+      return this.copy();
+    }
+    if (t >= 1) {
+      return other.copy();
+    }
+    return this.add(other.sub(this).mul(t));
+  }
+
+  toPlaneCoords(): Vector {
+    const y = (this.y * Math.sqrt(3)) / 2;
+    const x = this.x + this.y * 0.5;
+    return new Vector(x, y);
   }
 }
 
