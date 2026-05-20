@@ -47,6 +47,7 @@ export class Grid {
 
   turnResults: TurnResult[] = [];
   curTurnResultIdx: number = 0;
+  animationResolver: Resolver;
   prevResult: TurnResult | null = null;
   curResult: TurnResult | null = null;
 
@@ -63,7 +64,27 @@ export class Grid {
       visibilityRange: config.visibilityRange,
     };
     this.recalculateVisibleHexes();
+    this.animationResolver = new ResolverIdle(this);
     this.notifier = notifier;
+  }
+
+  public transition() {
+    this.nextTurnResult();
+
+    const nextAnimationResolver = this.getAnimationResolver();
+    this.animationResolver = nextAnimationResolver;
+    this.animationResolver.animate();
+  }
+
+  private getAnimationResolver(): Resolver {
+    if (this.curResult === null) {
+      return new ResolverIdle(this);
+    }
+    if (this.curResult.type === TurnResultType.EndTurn) {
+      return new ResolverFinish(this);
+    }
+
+    return new ResolverRest(this);
   }
 
   public getActions(): TankAction[] {
@@ -156,6 +177,7 @@ export class Grid {
   }
 
   public tick() {
+    this.animationResolver.animate();
     if (this.isPointerDown && this.curMode === PointerMode.TankNavigation) {
       this.handlePointerMove(this.lastPoint);
     }
@@ -369,5 +391,50 @@ export class Grid {
       }
     }
     return null;
+  }
+}
+
+interface Resolver {
+  grid: Grid;
+  animate(): void;
+}
+
+class ResolverFinish implements Resolver {
+  grid: Grid;
+
+  constructor(grid: Grid) {
+    this.grid = grid;
+  }
+
+  animate(): void {
+    this.grid.handleEndAnimation();
+    this.grid.transition();
+  }
+}
+
+class ResolverIdle implements Resolver {
+  grid: Grid;
+
+  constructor(grid: Grid) {
+    this.grid = grid;
+  }
+
+  animate() {
+    if (this.grid.peekTurnResult() === null) return;
+    this.grid.handleStartAnimation();
+    this.grid.transition();
+  }
+}
+
+class ResolverRest implements Resolver {
+  grid: Grid;
+
+  constructor(grid: Grid) {
+    this.grid = grid;
+  }
+
+  animate() {
+    this.grid.recalculateVisibleHexes();
+    this.grid.transition();
   }
 }
