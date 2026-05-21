@@ -10,12 +10,14 @@ import {
   TankAction,
   TurnResult,
   TurnResultMove2,
+  TurnResultMove3,
   TurnResultType,
 } from "./game-objects.js";
 import { Notifier } from "./notifier.js";
 import {
   idxToUnitVector,
   includesVector,
+  interpolatePath,
   isNeighbor,
   unitVectorToIdx,
   Vector,
@@ -100,6 +102,11 @@ export class Grid {
       const tank = this.getTank(this.curResult.id);
       if (tank === null) return new ResolverError(this);
       return new ResolverMove2(this, this.curResult, tank);
+    }
+    if (this.curResult.type === TurnResultType.Move3) {
+      const tank = this.getTank(this.curResult.id);
+      if (tank === null) return new ResolverError(this);
+      return new ResolverMove3(this, this.curResult, tank);
     }
 
     return new ResolverRest(this);
@@ -587,6 +594,123 @@ class ResolverMove2 implements Resolver {
     this.tank.pF = p;
 
     if (frac >= 1) {
+      this.grid.transition();
+    }
+  }
+}
+
+enum TurnType {
+  Straight,
+  Wide,
+  Sharp,
+}
+
+class ResolverMove3 implements Resolver {
+  grid: Grid;
+  result: TurnResultMove3;
+  tank: Tank;
+
+  turnType: TurnType;
+
+  startAngle: number;
+  endAngle: number;
+  dAngle: number;
+  turretOffset: number;
+
+  startT: number;
+  p1: Vector;
+  p2: Vector;
+  p3: Vector;
+  points: Vector[];
+  fracs: number[];
+
+  t: number;
+  aul: number;
+  low: number;
+
+  constructor(grid: Grid, result: TurnResultMove3, tank: Tank) {
+    this.grid = grid;
+    this.result = result;
+
+    const v1 = result.p2.sub(result.p1);
+    const v2 = result.p3.sub(result.p2);
+    this.turnType = TurnType.Wide;
+    this.low = 0.7;
+    if (v1.eq(v2)) {
+      this.turnType = TurnType.Straight;
+      this.low = 1;
+    } else if (result.p1.gridDistance(result.p3) === 1) {
+      this.turnType = TurnType.Sharp;
+      this.low = 0.3;
+    }
+
+    this.startAngle = unitVectorToIdx(v1) * 60;
+    this.turretOffset = normalize360(tank.angleTurret - tank.angleBody);
+    this.endAngle = unitVectorToIdx(v2) * 60;
+    this.dAngle = normalize180(this.endAngle - this.startAngle);
+
+    this.startT = this.grid.curT;
+    this.p2 = result.p2;
+    this.p1 = result.p1.add(result.p2).mul(0.5);
+    this.p3 = result.p3.add(result.p2).mul(0.5);
+
+    tank.p = this.p2;
+    this.tank = tank;
+    this.grid.recalculateVisibleHexes();
+
+    const d1 = this.p2.toPlaneCoords().sub(this.p1.toPlaneCoords()).length();
+    const d2 = this.p3.toPlaneCoords().sub(this.p2.toPlaneCoords()).length();
+    const d = d1 + d2;
+    const aul = areaUnderLine(1, this.low, 1);
+    this.aul = aul;
+
+    this.t = (d / (aul * TANK_MAX_SPEED)) * 1000;
+
+    const p1 = result.p1.add(result.p2).mul(0.5);
+    const p5 = result.p2.add(result.p3).mul(0.5);
+
+    const p2 = result.p2.add(p1.sub(result.p2).mul(0.7));
+    const p4 = result.p2.add(p5.sub(result.p2).mul(0.7));
+
+    const midToStart = p1.sub(result.p2);
+    const midToEnd = p5.sub(result.p2);
+    const p3 = result.p2.add(midToStart.add(midToEnd).mul(0.25));
+
+    this.points = [p1, p2, p3, p4, p5];
+
+    const lengths = [p2.sub(p1), p3.sub(p2), p4.sub(p3), p5.sub(p4)].map((p) =>
+      p.toPlaneCoords().length(),
+    );
+    const sum = lengths.reduce((s, l) => s + l, 0);
+    this.fracs = [];
+    let cur = 0;
+    for (const l of lengths) {
+      cur += l / sum;
+      this.fracs.push(cur);
+    }
+  }
+
+  animate() {
+    const fracT = (this.grid.curT - this.startT) / this.t;
+
+    let area = areaUnderLine(1, this.low, fracT * 2) / 2;
+    if (fracT >= 0.5) {
+      area += areaUnderLine(this.low, 1, (fracT - 0.5) * 2) / 2;
+    }
+    const frac = area / this.aul;
+
+    this.tank.pF = interpolatePath(this.points, this.fracs, frac);
+
+    const angleBody = normalize360(this.startAngle + fracT * this.dAngle);
+    const angleTurret = normalize360(angleBody + this.turretOffset);
+
+    this.tank.angleBody = angleBody;
+    this.tank.angleTurret = angleTurret;
+
+    if (fracT >= 1) {
+      this.tank.pF = this.p3;
+      this.tank.angleBody = this.endAngle;
+      this.tank.angleTurret = normalize360(this.endAngle + this.turretOffset);
       this.grid.transition();
     }
   }
