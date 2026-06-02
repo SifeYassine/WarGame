@@ -4,14 +4,18 @@ import {
   GameConfig,
   GameState,
   getTankById,
+  newSmokeMark,
   newTankFire,
   newTankMove,
   Tank,
   TankAction,
   TurnResult,
+  TurnResultDestroyed,
+  TurnResultExplosion,
   TurnResultMove2,
   TurnResultMove3,
   TurnResultType,
+  TurnResultVisible,
 } from "./game-objects.js";
 import { Notifier } from "./notifier.js";
 import {
@@ -27,6 +31,8 @@ const T_PRESS_TO_FIRE = 700;
 
 const TANK_ROTATION_SPEED = 100;
 const TANK_MAX_SPEED = 1.2;
+const EXPLOSION_DURATION = 900;
+const EXPLOSION_PAUSE_DURATION = 250;
 
 enum PointerMode {
   None,
@@ -64,6 +70,7 @@ export class Grid {
     config: GameConfig,
     notifier: Notifier,
   ) {
+    getCameraShake(0.5);
     this.gameState = gameState;
     this.displayDriver = displayDriver;
     this.config = {
@@ -107,6 +114,14 @@ export class Grid {
       const tank = this.getTank(this.curResult.id);
       if (tank === null) return new ResolverError(this);
       return new ResolverMove3(this, this.curResult, tank);
+    }
+    if (this.curResult.type === TurnResultType.Explosion) {
+      if (this.curResult.destroyed) {
+        const tank = this.getTank(this.curResult.id);
+        if (tank === null) return new ResolverError(this);
+        return new ResolverExplosion(this, this.curResult, tank);
+      }
+      return new ResolverExplosion(this, this.curResult);
     }
 
     return new ResolverRest(this);
@@ -716,15 +731,114 @@ class ResolverMove3 implements Resolver {
   }
 }
 
-class ResolverRest implements Resolver {
+class ResolverExplosion implements Resolver {
   grid: Grid;
+  tank?: Tank;
 
-  constructor(grid: Grid) {
+  startT: number;
+  p: Vector;
+  tPause: number;
+  tExplosion: number;
+  markAfter: number = 0.16;
+  marked = false;
+
+  constructor(grid: Grid, result: TurnResultExplosion, tank?: Tank) {
     this.grid = grid;
+    if (tank !== undefined) {
+      this.tank = tank;
+    }
+    this.startT = this.grid.curT;
+    this.p = result.p;
+
+    this.tPause = EXPLOSION_PAUSE_DURATION;
+    this.tExplosion = EXPLOSION_DURATION;
   }
 
   animate() {
+    let fracExplosion =
+      (this.grid.curT - this.startT - this.tPause) / this.tExplosion;
+    let frac =
+      (this.grid.curT - this.startT) / (this.tExplosion + 2 * this.tPause);
+    fracExplosion = Math.max(fracExplosion, 0);
+    this.animateExplosion(fracExplosion);
+    if (frac >= 1) {
+      this.grid.gameState.cameraShake = Vector.zero();
+      this.grid.recalculateVisibleHexes();
+      this.grid.transition();
+    }
+  }
+
+  animateExplosion(frac: number) {
+    this.grid.gameState.cameraShake = getCameraShake(frac).mul(0.1);
+    this.grid.gameState.explosion.frac = frac;
+    this.grid.gameState.explosion.p = this.p;
+    if (this.tank !== undefined && !this.marked && frac >= this.markAfter) {
+      this.marked = true;
+      this.tank.visible = false;
+      this.grid.gameState.overlays.push(newSmokeMark(this.tank.p));
+    }
+    if (frac >= 1) {
+      this.grid.gameState.explosion.frac = 0;
+    }
+  }
+}
+
+class ResolverRest implements Resolver {
+  grid: Grid;
+  turnResult: TurnResult;
+
+  constructor(grid: Grid) {
+    this.grid = grid;
+    this.turnResult = this.grid.curResult as TurnResult;
+  }
+
+  animate() {
+    switch (this.turnResult.type) {
+      case TurnResultType.Visible:
+        this.resolveVisibility(this.turnResult);
+        break;
+      case TurnResultType.Destroyed:
+        this.resolveDestroyed(this.turnResult);
+        break;
+    }
     this.grid.recalculateVisibleHexes();
     this.grid.transition();
   }
+
+  private resolveDestroyed(res: TurnResultDestroyed) {
+    const tank = getTankById(this.grid.gameState.enemyTanks, res.id);
+    if (tank === null) return;
+    tank.visible = false;
+    this.grid.gameState.overlays.push(newSmokeMark(res.p));
+  }
+
+  private resolveVisibility(res: TurnResultVisible) {
+    const tank = getTankById(this.grid.gameState.enemyTanks, res.id);
+    if (tank === null) return;
+    tank.p = res.p;
+    tank.pF = res.p;
+    tank.visible = res.visible;
+  }
+}
+
+function getCameraShake(frac: number) {
+  if (frac <= 0 || frac >= 1) {
+    return Vector.zero();
+  }
+
+  const mid = 0.25;
+
+  const x =
+    5.5 * Math.sin(20.8 * Math.PI * frac + 2.3) +
+    2.2 * Math.sin(5.6 * Math.PI * frac + 5) +
+    1.8 * Math.sin(11.2 * Math.PI * frac + 1);
+
+  const y =
+    4 * Math.sin(17.6 * Math.PI * frac - 2.5) +
+    2.8 * Math.sin(9.6 * Math.PI * frac + 4) +
+    1.6 * Math.sin(1.6 * Math.PI * frac + 0);
+
+  const lim = frac <= mid ? (1 / mid) * frac : 1 - (frac - mid) / (1 - mid);
+
+  return new Vector(x, y).mul(lim);
 }

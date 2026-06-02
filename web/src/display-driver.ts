@@ -15,6 +15,8 @@ const SPRITES_IMAGE_SRC = "./assets/sprites.png";
 const GREEN_HIGHLIGHT_IDX = 0;
 const YELLOW_HIGHLIGHT_IDX = 1;
 const DEFAULT_PRESET_IDX = 1;
+export const SMOKE_MARK_IDX = 0;
+export const SHRINK_MARK_IDX = 1;
 
 export class DisplayDriver {
   backgroundColor: string = "rgb(50, 50, 50)";
@@ -53,9 +55,11 @@ export class DisplayDriver {
     this.ctx.fillRect(0, 0, this.ctx.canvas.width, this.ctx.canvas.height);
 
     this.drawHexes();
+    this.drawOverlays();
     this.drawPaths();
     this.drawTanks();
     this.drawSites();
+    this.drawExplosions();
     this.drawUI();
 
     if (freeze) {
@@ -152,8 +156,12 @@ export class DisplayDriver {
   private drawSprite(sprite: Sprite, p: Vector) {
     const screenCords = this.gridToScreenCoords(p).round();
     const scale = this.curPreset.scale;
+    const shakeOffset = (this.gameState?.cameraShake || Vector.zero()).mul(
+      this.curPreset.sprites.hexSize.x * scale,
+    );
     const start = screenCords
       .add(sprite.offset.mul(scale))
+      .add(shakeOffset)
       .floor();
     const size = sprite.size.mul(scale);
     this.ctx.imageSmoothingEnabled = false;
@@ -168,6 +176,18 @@ export class DisplayDriver {
       size.x,
       size.y,
     );
+  }
+
+  private drawOverlays() {
+    if (this.gameState === null) return;
+    for (const overlay of this.gameState?.overlays) {
+      if (!this.gameState.hexes.has(overlay.p.toString())) {
+        continue;
+      }
+      const isLight = this.gameState.visibleHexes.has(overlay.p.toString());
+      const sprite = this.getOverlaySprite(overlay.variant, isLight);
+      this.drawSprite(sprite, overlay.p);
+    }
   }
 
   private drawUI() {
@@ -239,6 +259,20 @@ export class DisplayDriver {
     }
 
     this.ctx.restore();
+  }
+
+  private drawExplosions() {
+    if (this.gameState === null) return;
+
+    if (this.gameState.explosion.frac > 0) {
+      const sprites = this.curPreset.sprites.explosion;
+      const idx = Math.min(
+        sprites.length - 1,
+        Math.floor(this.gameState.explosion.frac * sprites.length),
+      );
+      const sprite = sprites[idx];
+      this.drawSprite(sprite, this.gameState.explosion.p);
+    }
   }
 
   private drawPaths() {
@@ -415,6 +449,14 @@ export class DisplayDriver {
 
   private getHighlightSprite(variant: number): Sprite {
     return this.curPreset.sprites.overlays.highlights[variant];
+  }
+
+  private getOverlaySprite(variant: number, light: boolean): Sprite {
+    const overlays = this.curPreset.sprites.overlays.markers;
+    if (light) {
+      return overlays.light[variant];
+    }
+    return overlays.dark[variant];
   }
 
   private getPathSprite(idx: number, variant: string) {

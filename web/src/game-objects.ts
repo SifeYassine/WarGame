@@ -1,3 +1,4 @@
+import { SHRINK_MARK_IDX, SMOKE_MARK_IDX } from "./display-driver.js";
 import { Vector } from "./vector.js";
 
 export function getTankById(tanks: Tank[], id: number): Tank | null {
@@ -60,6 +61,11 @@ export type Hex = {
   opacity: number;
 };
 
+export type Explosion = {
+  frac: number;
+  p: Vector;
+};
+
 export type Site = {
   p: Vector;
   variant: number;
@@ -76,6 +82,19 @@ export type Tank = {
   shootingDir: number;
   visible: boolean;
 };
+
+export type Overlay = {
+  p: Vector;
+  variant: number;
+};
+
+export function newSmokeMark(p: Vector): Overlay {
+  return { p: p, variant: SMOKE_MARK_IDX };
+}
+
+export function newShrinkMark(p: Vector): Overlay {
+  return { p: p, variant: SHRINK_MARK_IDX };
+}
 
 export enum TurnResultType {
   Move2 = 1,
@@ -159,6 +178,9 @@ export class GameState {
   availableHexes: Set<string> = new Set();
   conditionallyAvailableHexes: Set<string> = new Set();
   turnOrder: number[] = [];
+  overlays: Overlay[] = [];
+  explosion: Explosion = { frac: 0, p: Vector.zero() };
+  cameraShake: Vector = Vector.zero();
 
   constructor(config: GameConfig) {
     this.hexes = new Map(
