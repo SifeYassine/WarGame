@@ -264,6 +264,16 @@ export class DisplayDriver {
   private drawExplosions() {
     if (this.gameState === null) return;
 
+    if (this.gameState.firingExplosion.frac > 0) {
+      const sprites = this.curPreset.sprites.smallExplosion;
+      const idx = Math.min(
+        sprites.length - 1,
+        Math.floor(this.gameState.firingExplosion.frac * sprites.length),
+      );
+      const sprite = sprites[idx];
+      this.drawSprite(sprite, this.gameState.firingExplosion.p);
+    }
+
     if (this.gameState.explosion.frac > 0) {
       const sprites = this.curPreset.sprites.explosion;
       const idx = Math.min(

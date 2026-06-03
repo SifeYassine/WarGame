@@ -12,6 +12,7 @@ import {
   TurnResult,
   TurnResultDestroyed,
   TurnResultExplosion,
+  TurnResultFire,
   TurnResultMove2,
   TurnResultMove3,
   TurnResultType,
@@ -31,6 +32,8 @@ const T_PRESS_TO_FIRE = 700;
 
 const TANK_ROTATION_SPEED = 100;
 const TANK_MAX_SPEED = 1.2;
+const FIRING_DURATION = 350;
+const FIRING_PAUSE = 300;
 const EXPLOSION_DURATION = 900;
 const EXPLOSION_PAUSE_DURATION = 250;
 
@@ -114,6 +117,11 @@ export class Grid {
       const tank = this.getTank(this.curResult.id);
       if (tank === null) return new ResolverError(this);
       return new ResolverMove3(this, this.curResult, tank);
+    }
+    if (this.curResult.type === TurnResultType.Fire) {
+      const tank = this.getTank(this.curResult.id);
+      if (tank === null) return new ResolverError(this);
+      return new ResolverFire(this, this.curResult, tank);
     }
     if (this.curResult.type === TurnResultType.Explosion) {
       if (this.curResult.destroyed) {
@@ -728,6 +736,116 @@ class ResolverMove3 implements Resolver {
       this.tank.angleTurret = normalize360(this.endAngle + this.turretOffset);
       this.grid.transition();
     }
+  }
+}
+
+class ResolverFire implements Resolver {
+  grid: Grid;
+  tank: Tank;
+
+  startT: number;
+  tFiring: number;
+  tPause: number;
+  tRotation: number;
+
+  pFiring: Vector;
+
+  startAngle: number;
+  endAngle: number;
+  turretOffset: number;
+  dAngleBody: number;
+  dAngleTurret: number;
+
+  turretOnly: boolean;
+
+  constructor(grid: Grid, result: TurnResultFire, tank: Tank) {
+    this.grid = grid;
+    this.tank = tank;
+    this.startT = this.grid.curT;
+
+    this.startAngle = tank.angleBody;
+    this.turretOffset = normalize180(tank.angleTurret - tank.angleBody);
+    this.endAngle = unitVectorToIdx(result.dir) * 60;
+
+    const absAngleBetweenBodyAndDir = Math.abs(
+      normalize180(this.endAngle - tank.angleBody),
+    );
+    if (absAngleBetweenBodyAndDir < 90) {
+      this.dAngleBody = 0;
+      this.dAngleTurret = normalize180(this.endAngle - tank.angleTurret);
+      this.turretOnly = true;
+      this.tRotation =
+        (Math.abs(this.dAngleTurret) / TANK_ROTATION_SPEED) * 1000;
+    } else {
+      this.dAngleBody = normalize180(this.endAngle - this.startAngle);
+      this.dAngleTurret = -this.turretOffset;
+      this.turretOnly = false;
+      this.tRotation =
+        (Math.max(Math.abs(this.dAngleBody), Math.abs(this.dAngleTurret)) /
+          TANK_ROTATION_SPEED) *
+        1000;
+    }
+
+    this.tFiring = FIRING_DURATION;
+    this.tPause = FIRING_PAUSE;
+    this.pFiring = this.tank.p.add(result.dir.mul(0.3));
+  }
+
+  animate() {
+    const elapsed = this.grid.curT - this.startT;
+    const fracT1 = this.tRotation === 0 ? 1 : elapsed / this.tRotation;
+    const fracT2 = (elapsed - this.tRotation - this.tPause) / this.tFiring;
+    this.animateRotation(fracT1);
+    if (fracT2 >= 0) {
+      this.animateFiring(fracT2);
+    }
+  }
+
+  animateFiring(frac: number) {
+    this.grid.gameState.cameraShake = getCameraShake(frac).mul(0.04);
+    if (frac >= 1) {
+      this.grid.gameState.cameraShake = Vector.zero();
+      this.grid.gameState.firingExplosion.frac = 0;
+      this.grid.transition();
+      return;
+    }
+    if (frac <= 0 || frac >= 1) {
+      this.grid.gameState.firingExplosion.frac = 0;
+      return;
+    }
+    this.grid.gameState.firingExplosion.frac = frac;
+    this.grid.gameState.firingExplosion.p = this.pFiring;
+  }
+
+  animateRotation(frac: number) {
+    if (frac <= 0) {
+      return;
+    }
+    if (frac >= 1) {
+      if (this.turretOnly) {
+        this.tank.angleBody = this.startAngle;
+        this.tank.angleTurret = this.endAngle;
+        return;
+      }
+      this.tank.angleBody = this.endAngle;
+      this.tank.angleTurret = this.endAngle;
+      return;
+    }
+
+    if (this.turretOnly) {
+      this.tank.angleBody = this.startAngle;
+      this.tank.angleTurret = normalize360(
+        this.startAngle + this.turretOffset + frac * this.dAngleTurret,
+      );
+      return;
+    }
+
+    this.tank.angleBody = normalize360(
+      this.startAngle + frac * this.dAngleBody,
+    );
+    this.tank.angleTurret = normalize360(
+      this.tank.angleBody + this.turretOffset + frac * this.dAngleTurret,
+    );
   }
 }
 
