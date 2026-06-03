@@ -15,4 +15,9 @@ public class GameConfig
     public int VisibilityRange { get; init; }
     public int FireRange { get; init; }
     public Vector Center { get; init; }
+
+    // The map starts shrinking on turn ShrinkAfter, then every ShrinkInterval turns.
+    public int ShrinkAfter { get; init; }
+    public int ShrinkInterval { get; init; }
+    public int Radius { get; init; }
 }

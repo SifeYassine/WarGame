@@ -18,10 +18,12 @@ public class GameState
 
     private bool _turnP1; // starts false: player 2 acts first on turn 1, as in the Go version
     private int _turn = 1;
+    private int _radius;
 
     public GameState(GameConfig config)
     {
         _config = config;
+        _radius = config.Radius;
 
         foreach (var hex in config.Hexes)
         {
@@ -94,6 +96,8 @@ public class GameState
             ResolvePlayer(actionsP2, p2, p1);
             ResolvePlayer(actionsP1, p1, p2);
         }
+
+        ResolveShrinking(p1, p2);
 
         _turnP1 = !_turnP1;
         foreach (var tank in _tanksP1.Values.Concat(_tanksP2.Values))
@@ -199,6 +203,57 @@ public class GameState
         }
     }
 
+    private void ResolveShrinking(Side p1, Side p2)
+    {
+        bool shrinksNow = ShrinksOnTurn(_turn);
+        bool shrinksNext = ShrinksOnTurn(_turn + 1);
+
+        if (shrinksNow)
+        {
+            DestroyTanksOutsideRadius(p2, p1);
+            DestroyTanksOutsideRadius(p1, p2);
+
+            // ToList() makes a copy, because we can't remove items from a
+            // dictionary while looping over it.
+            var removed = _hexes.Keys.Where(p => p.DistanceTo(_config.Center) >= _radius).ToList();
+            foreach (var position in removed)
+            {
+                _hexes.Remove(position);
+            }
+
+            AddToBoth(new ShrinkResultDto(_radius, true), p1, p2);
+            UpdateVisibilities(p1, p2);
+            _radius--;
+        }
+
+        // Warn the players one turn before the map shrinks.
+        if (shrinksNext)
+        {
+            AddToBoth(new ShrinkResultDto(_radius, false), p1, p2);
+        }
+    }
+
+    private bool ShrinksOnTurn(int turn) =>
+        turn >= _config.ShrinkAfter && (turn - _config.ShrinkAfter) % _config.ShrinkInterval == 0;
+
+    private void DestroyTanksOutsideRadius(Side owner, Side other)
+    {
+        foreach (var tank in owner.Tanks.Values)
+        {
+            if (tank.Destroyed || tank.Position.DistanceTo(_config.Center) < _radius)
+            {
+                continue;
+            }
+            tank.Destroyed = true;
+            var explosion = new ExplosionResultDto(tank.Position, true, tank.Id);
+            owner.Results.Add(explosion);
+            if (tank.Visible)
+            {
+                other.Results.Add(explosion);
+            }
+        }
+    }
+
     // The owner always sees what their tank does; the enemy only if the tank is visible.
     private static void ReportTankAction(TurnResultDto result, Tank tank, Side player, Side enemy)
     {
@@ -207,6 +262,12 @@ public class GameState
         {
             enemy.Results.Add(result);
         }
+    }
+
+    private static void AddToBoth(TurnResultDto result, Side a, Side b)
+    {
+        a.Results.Add(result);
+        b.Results.Add(result);
     }
 
     private void UpdateVisibilities(Side a, Side b)

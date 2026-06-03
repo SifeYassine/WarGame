@@ -37,6 +37,10 @@ public class BasicGameConfigFactory : IGameConfigFactory
             VisibilityRange = 2,
             FireRange = 3,
             Center = center,
+            ShrinkAfter = 2,
+            ShrinkInterval = 3,
+            // The radius is the distance from the center to the farthest hex.
+            Radius = hexes.Max(h => h.P.DistanceTo(center)),
         };
     }
 }
