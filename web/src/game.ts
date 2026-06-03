@@ -9,6 +9,17 @@ import { WsDriver } from "./ws-driver.js";
 
 const WS_URL = "ws";
 
+function resultString(result: GameResult): string {
+  switch (result) {
+    case GameResult.Win:
+      return "you won!";
+    case GameResult.Draw:
+      return "draw";
+    case GameResult.Lose:
+      return "you lost...";
+  }
+}
+
 function elementToScreenCoords(elementP: Vector): Vector {
   return elementP.mul(window.devicePixelRatio).round();
 }
@@ -286,6 +297,7 @@ class GameStateInGame implements StateGame {
   isAnimating: boolean = false;
 
   str = "in-game";
+  modalQueue: string[] = [];
   gameFinished: boolean = false;
   counterIncoming: number = 0;
   counterFinished: number = 0;
@@ -296,6 +308,7 @@ class GameStateInGame implements StateGame {
 
   onEnter() {
     this.isAnimating = false;
+    this.modalQueue = [];
     this.gameFinished = false;
     this.counterIncoming = 0;
     this.counterFinished = 0;
@@ -311,6 +324,15 @@ class GameStateInGame implements StateGame {
         this.game.ui.setSendTurnAvailability(false);
         this.isAnimating = true;
         break;
+      case GameEventType.GameFinished:
+        this.gameFinished = true;
+        this.game.ui.setSendTurnAvailability(false);
+        if (this.isAnimating) {
+          this.modalQueue.push(resultString(event.result));
+          return;
+        }
+        this.game.ui.addModal(resultString(event.result));
+        break;
       case GameEventType.WsClose:
         this.game.ui.setSendTurnAvailability(false);
         this.game.ui.setOnlineGameAvailability(false);
@@ -321,6 +343,13 @@ class GameStateInGame implements StateGame {
         break;
       case GameEventType.RoomDisconnected:
         this.game.ui.setSendTurnAvailability(false);
+        if (this.gameFinished) {
+          return;
+        }
+        if (this.isAnimating) {
+          this.modalQueue.push("room disconnected");
+          return;
+        }
         this.game.ui.addModal("room disconnected");
         this.game.removeGrid();
         this.game.ui.enableMode(UIMode.Main);
@@ -351,6 +380,9 @@ class GameStateInGame implements StateGame {
         if (this.counterFinished === this.counterIncoming) {
           this.isAnimating = false;
           this.game.ui.setSendTurnAvailability(!this.gameFinished);
+          for (const modalText of this.modalQueue) {
+            this.game.ui.addModal(modalText);
+          }
         }
         break;
       case GameEventType.TankManipulation:
