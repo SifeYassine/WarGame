@@ -6,8 +6,10 @@ import { UI, UIMode } from "./ui.js";
 import { Notifier } from "./notifier.js";
 import { GameEvent, GameEventType } from "./game-event.js";
 import { WsDriver } from "./ws-driver.js";
+import { AudioDriver } from "./audio-driver.js";
 
 const WS_URL = "ws";
+const AUDIO_FAIL_MESSAGE = "failed to load audio";
 
 function resultString(result: GameResult): string {
   switch (result) {
@@ -30,6 +32,7 @@ enum Layer {
 }
 
 export class Game {
+  audioDriver: AudioDriver;
   notifier: Notifier;
   displayDriver: DisplayDriver;
   wsDriver: WsDriver;
@@ -48,6 +51,7 @@ export class Game {
 
   constructor(ctx: CanvasRenderingContext2D) {
     this.notifier = new Notifier(this);
+    this.audioDriver = new AudioDriver(this.notifier);
     this.wsDriver = new WsDriver(WS_URL, this.notifier);
     const canvas = ctx.canvas;
     this.initEventListeners(canvas);
@@ -196,6 +200,7 @@ class GameStateMainMenu implements StateGame {
   }
 
   onEnter(): void {
+    this.game.audioDriver.setSoundGlobal(false);
   }
 
   update(event: GameEvent) {
@@ -214,6 +219,9 @@ class GameStateMainMenu implements StateGame {
         this.game.freeze = true;
         this.game.setState(this.game.states.waitingForRoom);
         break;
+      case GameEventType.AudioLoadFail:
+        this.game.ui.addModal(AUDIO_FAIL_MESSAGE);
+        break;
     }
   }
 }
@@ -226,6 +234,7 @@ class GameStateWaitForRoom implements StateGame {
   }
 
   onEnter(): void {
+    this.game.audioDriver.setSoundGlobal(false);
   }
 
   update(event: GameEvent): void {
@@ -249,6 +258,9 @@ class GameStateWaitForRoom implements StateGame {
         this.game.ui.addModal("cant join room");
         this.game.setState(this.game.states.mainMenu);
         break;
+      case GameEventType.AudioLoadFail:
+        this.game.ui.addModal(AUDIO_FAIL_MESSAGE);
+        break;
     }
   }
 }
@@ -260,6 +272,7 @@ class GameStateWaitingRoom implements StateGame {
   }
 
   onEnter(): void {
+    this.game.audioDriver.setSoundGlobal(false);
   }
 
   update(event: GameEvent): void {
@@ -289,6 +302,9 @@ class GameStateWaitingRoom implements StateGame {
         this.game.ui.enableMode(UIMode.Main);
         this.game.setState(this.game.states.mainMenu);
         break;
+      case GameEventType.AudioLoadFail:
+        this.game.ui.addModal(AUDIO_FAIL_MESSAGE);
+        break;
     }
   }
 }
@@ -307,6 +323,7 @@ class GameStateInGame implements StateGame {
   }
 
   onEnter() {
+    this.game.audioDriver.setSoundGlobal(true);
     this.isAnimating = false;
     this.modalQueue = [];
     this.gameFinished = false;
@@ -389,6 +406,9 @@ class GameStateInGame implements StateGame {
         if (!this.gameFinished && !this.isAnimating) {
           this.game.ui.setSendTurnAvailability(true);
         }
+        break;
+      case GameEventType.AudioLoadFail:
+        this.game.ui.addModal(AUDIO_FAIL_MESSAGE);
         break;
     }
   }

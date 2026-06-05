@@ -19,6 +19,8 @@ export enum GameEventType {
   ButtonQuitGame,
   AnimationEnd,
   TankManipulation,
+  AudioLoadFail,
+  AudioLoadSuccess,
 }
 
 export type TypeOnlyEvent =
@@ -34,6 +36,8 @@ export type TypeOnlyEvent =
   | GameEventType.RoomDisconnected
   | GameEventType.AnimationEnd
   | GameEventType.TankManipulation
+  | GameEventType.AudioLoadSuccess
+  | GameEventType.AudioLoadFail;
 
 export type GameEvent =
   | {
