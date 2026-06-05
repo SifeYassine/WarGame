@@ -17,6 +17,8 @@ export enum GameEventType {
   ButtonJoinRoom,
   ButtonSendTurn,
   ButtonQuitGame,
+  ButtonUnmute,
+  ButtonMute,
   AnimationEnd,
   TankManipulation,
   AudioLoadFail,
@@ -30,6 +32,8 @@ export type TypeOnlyEvent =
   | GameEventType.ButtonJoinRoom
   | GameEventType.ButtonSendTurn
   | GameEventType.ButtonQuitGame
+  | GameEventType.ButtonUnmute
+  | GameEventType.ButtonMute
   | GameEventType.WsOpen
   | GameEventType.WsClose
   | GameEventType.RoomJoined

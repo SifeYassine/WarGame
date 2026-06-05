@@ -222,6 +222,9 @@ class GameStateMainMenu implements StateGame {
       case GameEventType.AudioLoadFail:
         this.game.ui.addModal(AUDIO_FAIL_MESSAGE);
         break;
+      case GameEventType.AudioLoadSuccess:
+        this.game.ui.allowUnmute();
+        break;
     }
   }
 }
@@ -260,6 +263,9 @@ class GameStateWaitForRoom implements StateGame {
         break;
       case GameEventType.AudioLoadFail:
         this.game.ui.addModal(AUDIO_FAIL_MESSAGE);
+        break;
+      case GameEventType.AudioLoadSuccess:
+        this.game.ui.allowUnmute();
         break;
     }
   }
@@ -304,6 +310,9 @@ class GameStateWaitingRoom implements StateGame {
         break;
       case GameEventType.AudioLoadFail:
         this.game.ui.addModal(AUDIO_FAIL_MESSAGE);
+        break;
+      case GameEventType.AudioLoadSuccess:
+        this.game.ui.allowUnmute();
         break;
     }
   }
@@ -409,6 +418,17 @@ class GameStateInGame implements StateGame {
         break;
       case GameEventType.AudioLoadFail:
         this.game.ui.addModal(AUDIO_FAIL_MESSAGE);
+        break;
+      case GameEventType.AudioLoadSuccess:
+        this.game.ui.allowUnmute();
+        break;
+      case GameEventType.ButtonUnmute:
+        this.game.ui.setAudioButton(true);
+        this.game.audioDriver.setSoundInGame(true);
+        break;
+      case GameEventType.ButtonMute:
+        this.game.ui.setAudioButton(false);
+        this.game.audioDriver.setSoundInGame(false);
         break;
     }
   }
