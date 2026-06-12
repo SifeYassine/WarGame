@@ -5,11 +5,26 @@ const AUDIO_PATH = "/assets/sounds.mp3";
 const AudioCtx =
   window.AudioContext || ((window as any).webkitAudioContext as AudioContext);
 
+type ContinualSoundType = "driving" | "turret-rotation";
+type SoundEffectType = "tank-firing" | "explosion";
+
+const CONFIG = {
+  driving: { loopStart: 1, loopEnd: 15 },
+  "turret-rotation": { loopStart: 19.5, loopEnd: 23 },
+  "tank-firing": { start: 24.88, length: 1.1 },
+  explosion: { start: 29, length: 4 },
+};
+
 type AudioNodes = {
   audioBuffer: AudioBuffer;
   gainGame: GainNode;
   gainGlobal: GainNode;
   ambient: AudioBufferSourceNode;
+
+  driving: GainNode;
+  "turret-rotation": GainNode;
+  "tank-firing": AudioBufferSourceNode | null;
+  explosion: AudioBufferSourceNode | null;
 };
 
 export class AudioDriver {
@@ -57,6 +72,30 @@ export class AudioDriver {
     const silencerNode = this.audioCtx.createGain();
     silencerNode.gain.value = 0.2;
 
+    // TODO clean this up
+
+    const drivingGain = this.audioCtx.createGain();
+    drivingGain.gain.value = 0;
+    drivingGain.connect(gainGame);
+    const drivingSourceNode = this.audioCtx.createBufferSource();
+    drivingSourceNode.buffer = audioBuffer;
+    drivingSourceNode.loopStart = CONFIG["driving"].loopStart;
+    drivingSourceNode.loopEnd = CONFIG["driving"].loopEnd;
+    drivingSourceNode.loop = true;
+    drivingSourceNode.connect(drivingGain);
+    drivingSourceNode.start(0, CONFIG["driving"].loopStart);
+
+    const turretRotationGain = this.audioCtx.createGain();
+    turretRotationGain.gain.value = 0;
+    turretRotationGain.connect(gainGame);
+    const turretRotationSourceNode = this.audioCtx.createBufferSource();
+    turretRotationSourceNode.buffer = audioBuffer;
+    turretRotationSourceNode.loopStart = CONFIG["turret-rotation"].loopStart;
+    turretRotationSourceNode.loopEnd = CONFIG["turret-rotation"].loopEnd;
+    turretRotationSourceNode.loop = true;
+    turretRotationSourceNode.connect(turretRotationGain);
+    turretRotationSourceNode.start(0, CONFIG["turret-rotation"].loopStart);
+
     masterSilencer.connect(this.audioCtx.destination);
     gainGlobal.connect(masterSilencer);
     gainGame.connect(gainGlobal);
@@ -68,6 +107,11 @@ export class AudioDriver {
       gainGame: gainGame,
       gainGlobal: gainGlobal,
       ambient: ambient,
+
+      driving: drivingGain,
+      "turret-rotation": turretRotationGain,
+      "tank-firing": null,
+      explosion: null,
     };
   }
 
@@ -91,5 +135,29 @@ export class AudioDriver {
     if (play && this.audioCtx.state === "suspended") {
       this.audioCtx.resume();
     }
+  }
+
+  public startSound(sound: ContinualSoundType) {
+    if (this.nodes === null) return;
+    this.nodes[sound].gain.value = 1;
+  }
+
+  public endSound(sound: ContinualSoundType) {
+    if (this.nodes === null) return;
+    this.nodes[sound].gain.value = 0;
+  }
+
+  public playSoundEffect(sound: SoundEffectType) {
+    if (this.nodes === null) {
+      return;
+    }
+    if (this.nodes[sound] !== null) {
+      this.nodes[sound].disconnect();
+    }
+    const node = this.audioCtx.createBufferSource();
+    node.buffer = this.nodes.audioBuffer;
+    node.connect(this.nodes.gainGame);
+    node.start(0, CONFIG[sound].start, CONFIG[sound].length);
+    this.nodes[sound] = node;
   }
 }

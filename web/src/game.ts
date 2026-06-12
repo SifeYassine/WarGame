@@ -125,6 +125,7 @@ export class Game {
       this.displayDriver,
       config,
       this.notifier,
+      this.audioDriver,
     );
     this.displayDriver.gameState = gameState;
     this.displayDriver.reset();

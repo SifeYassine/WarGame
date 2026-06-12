@@ -1,3 +1,4 @@
+import { AudioDriver } from "./audio-driver.js";
 import { DisplayDriver } from "./display-driver.js";
 import { GameEventType } from "./game-event.js";
 import {
@@ -50,6 +51,7 @@ enum PointerMode {
 
 export class Grid {
   gameState: GameState;
+  audioDriver: AudioDriver;
   displayDriver: DisplayDriver;
   notifier: Notifier;
   config: {
@@ -76,6 +78,7 @@ export class Grid {
     displayDriver: DisplayDriver,
     config: GameConfig,
     notifier: Notifier,
+    audioDriver: AudioDriver,
   ) {
     getCameraShake(0.5);
     this.gameState = gameState;
@@ -88,6 +91,7 @@ export class Grid {
     this.recalculateVisibleHexes();
     this.animationResolver = new ResolverIdle(this);
     this.notifier = notifier;
+    this.audioDriver = audioDriver;
   }
 
   public transition() {
@@ -592,6 +596,7 @@ class ResolverMove2 implements Resolver {
   }
 
   animate() {
+    this.grid.audioDriver.startSound("driving");
     const elapsed = this.grid.curT - this.startT;
     const fracT1 = this.tRotation === 0 ? 1 : elapsed / this.tRotation;
     const fracT2 = (elapsed - this.tRotation) / this.tMove;
@@ -625,6 +630,7 @@ class ResolverMove2 implements Resolver {
     this.tank.pF = p;
 
     if (frac >= 1) {
+      this.grid.audioDriver.endSound("driving");
       this.grid.transition();
     }
   }
@@ -722,6 +728,7 @@ class ResolverMove3 implements Resolver {
   }
 
   animate() {
+    this.grid.audioDriver.startSound("driving");
     const fracT = (this.grid.curT - this.startT) / this.t;
 
     let area = areaUnderLine(1, this.low, fracT * 2) / 2;
@@ -739,6 +746,7 @@ class ResolverMove3 implements Resolver {
     this.tank.angleTurret = angleTurret;
 
     if (fracT >= 1) {
+      this.grid.audioDriver.endSound("driving");
       this.tank.pF = this.p3;
       this.tank.angleBody = this.endAngle;
       this.tank.angleTurret = normalize360(this.endAngle + this.turretOffset);
@@ -765,6 +773,8 @@ class ResolverFire implements Resolver {
   dAngleTurret: number;
 
   turretOnly: boolean;
+
+  playedFiringSound = false;
 
   constructor(grid: Grid, result: TurnResultFire, tank: Tank) {
     this.grid = grid;
@@ -809,7 +819,16 @@ class ResolverFire implements Resolver {
     }
   }
 
+  playFireSound() {
+    if (this.playedFiringSound) {
+      return;
+    }
+    this.playedFiringSound = true;
+    this.grid.audioDriver.playSoundEffect("tank-firing");
+  }
+
   animateFiring(frac: number) {
+    this.playFireSound();
     this.grid.gameState.cameraShake = getCameraShake(frac).mul(0.04);
     if (frac >= 1) {
       this.grid.gameState.cameraShake = Vector.zero();
@@ -830,6 +849,8 @@ class ResolverFire implements Resolver {
       return;
     }
     if (frac >= 1) {
+      this.grid.audioDriver.endSound("turret-rotation");
+      this.grid.audioDriver.endSound("driving");
       if (this.turretOnly) {
         this.tank.angleBody = this.startAngle;
         this.tank.angleTurret = this.endAngle;
@@ -841,6 +862,7 @@ class ResolverFire implements Resolver {
     }
 
     if (this.turretOnly) {
+      this.grid.audioDriver.startSound("turret-rotation");
       this.tank.angleBody = this.startAngle;
       this.tank.angleTurret = normalize360(
         this.startAngle + this.turretOffset + frac * this.dAngleTurret,
@@ -848,6 +870,10 @@ class ResolverFire implements Resolver {
       return;
     }
 
+    this.grid.audioDriver.startSound("driving");
+    if (Math.abs(this.turretOffset) > 1) {
+      this.grid.audioDriver.startSound("turret-rotation");
+    }
     this.tank.angleBody = normalize360(
       this.startAngle + frac * this.dAngleBody,
     );
@@ -868,6 +894,8 @@ class ResolverExplosion implements Resolver {
   markAfter: number = 0.16;
   marked = false;
 
+  playedExplosionSound = false;
+
   constructor(grid: Grid, result: TurnResultExplosion, tank?: Tank) {
     this.grid = grid;
     if (tank !== undefined) {
@@ -885,6 +913,10 @@ class ResolverExplosion implements Resolver {
       (this.grid.curT - this.startT - this.tPause) / this.tExplosion;
     let frac =
       (this.grid.curT - this.startT) / (this.tExplosion + 2 * this.tPause);
+    if (!this.playedExplosionSound && fracExplosion >= 0) {
+      this.playedExplosionSound = true;
+      this.grid.audioDriver.playSoundEffect("explosion");
+    }
     fracExplosion = Math.max(fracExplosion, 0);
     this.animateExplosion(fracExplosion);
     if (frac >= 1) {
